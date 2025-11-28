@@ -1,0 +1,1838 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>SVA Regional Explorer — Participatory Mapping</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <!-- (S1.1) Leaflet CSS/JS -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+        integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="">
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+          integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+
+  <!-- (S1.2) Shapefile loader (shp.js) -->
+  <script src="https://unpkg.com/shpjs@latest/dist/shp.min.js"></script>
+
+<!-- (S1.3) GeoTIFF support (for land-cover raster) -->
+<!-- 1) GeoRaster parser (defines window.parseGeoraster) -->
+<script src="https://unpkg.com/georaster/dist/georaster.browser.bundle.min.js"></script>
+
+<!-- 2) Leaflet layer that can draw GeoRaster objects -->
+<script src="https://unpkg.com/georaster-layer-for-leaflet/dist/georaster-layer-for-leaflet.min.js"></script>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+
+  <!-- (S1.3) Minimal styling (white sidebar) -->
+ <style>
+  :root{
+    --sidebar-bg:#ffffff; --sidebar-fg:#0f172a; --muted:#64748b;
+    --panel:#f8fafc; --border:#e5e7eb; --accent:#0ea5e9;
+
+    --sidebar-gap:24px;   /* space to edges */
+    --sidebar-w:420px;    /* sidebar width */
+  }
+
+  html,body{
+    height:100%;
+    margin:0;
+    font-family: Corbel, "Segoe UI", Roboto, Arial, sans-serif;
+    font-size:11pt;
+  }
+
+  .app{ position:relative; height:100%; }
+
+  #map{
+    position:absolute;
+    inset:0;
+    background:#eef2ff;
+    z-index:0;
+  }
+
+  .sidebar{
+    position:absolute;
+    right:var(--sidebar-gap);
+    top:var(--sidebar-gap);
+    bottom:var(--sidebar-gap);
+    width:var(--sidebar-w);
+    overflow:auto;
+    background:var(--sidebar-bg);
+    color:var(--sidebar-fg);
+    border:1px solid var(--border);
+    border-radius:14px;
+    padding:18px 18px 14px;
+    box-shadow:0 10px 30px rgba(0,0,0,.15);
+    z-index:1200;
+  }
+
+  /* Floating panel for the Hiking statistics chart, positioned next to the sidebar */
+#hikingStatsCard{
+  /* we let JS control display and position; this only sets appearance */
+  background:var(--sidebar-bg);
+  color:var(--sidebar-fg);
+  border:1px solid var(--border);
+  border-radius:14px;
+  padding:12px 14px 10px;
+  box-shadow:0 8px 20px rgba(0,0,0,0.18);
+  z-index:1500;  /* above map + sidebar */
+}
+
+  /* Land-cover legend inside tool panel */
+  .lc-legend-table{
+    width:100%;
+    border-collapse:collapse;
+    font-size:11px;
+  }
+  .lc-legend-row td{
+    padding:2px 0;
+    vertical-align:middle;
+  }
+  .lc-swatch{
+    width:16px;
+    height:16px;
+    border-radius:3px;
+    border:1px solid rgba(0,0,0,.25);
+    display:inline-block;
+    margin-right:6px;
+  }
+
+  .logo-wrap{
+    margin-bottom:10px;
+  }
+  .logo-img{
+    max-width:210px;
+    height:auto;
+    display:block;
+  }
+
+  h1{font-size:18px;margin:4px 0 10px;}
+  h2{font-size:14px;margin:0 0 8px;}
+  .small{font-size:12px;}
+  .muted{color:var(--muted);}
+
+  .card{
+    background:transparent;
+    border:none;
+    padding:0 0 16px;
+    margin:0 0 16px;
+  }
+
+  .stack{display:grid;gap:6px;}
+  .row{display:flex;gap:10px;align-items:center;flex-wrap:wrap;}
+
+  a,a:visited{color:#2563eb;text-decoration:none;}
+  a:hover{text-decoration:underline;}
+
+  .divider{
+    border:0;
+    border-top:1px solid var(--border);
+    margin:12px 0 16px;
+  }
+
+  /* Legend / layer list */
+  .legend-group {
+    border:0;
+    background:transparent;
+    border-radius:0;
+    padding:8px 0 4px;
+    margin-top:4px;
+  }
+  .legend-header {
+    display:flex;
+    align-items:center;
+    gap:6px;
+    font-weight:600;
+    margin:2px 0 6px;
+  }
+  .legend-item {
+    display:flex;
+    align-items:center;
+    gap:8px;
+    padding:4px 0;
+    margin:0 0 0 22px;
+    border-radius:8px;
+  }
+  .legend-item:hover { background:#f8fafc; }
+  .legend-swatch {
+    width:16px; height:16px;
+    border-radius:3px;
+    border:1px solid rgba(0,0,0,.15);
+    flex:0 0 16px;
+  }
+  .legend-note { margin-top:6px; color:var(--muted); }
+
+  /* “i” info icon with hover tooltip */
+  .info-icon{
+    position:relative;
+    display:inline-flex;
+    align-items:center;
+    justify-content:center;
+    width:16px;
+    height:16px;
+    border-radius:9999px;
+    border:1px solid var(--muted);
+    color:var(--muted);
+    font-size:11px;
+    line-height:1;
+    cursor:default;
+  }
+  .info-icon .info-tooltip{
+    position:absolute;
+    top:20px;
+    left:50%;                 /* center under the (i) */
+    right:auto;
+    width:210px;
+    max-width:210px;
+    background:#fff;
+    border:1px solid var(--border);
+    border-radius:8px;
+    padding:8px 10px;
+    font-size:11px;
+    color:var(--muted);
+    box-shadow:0 10px 20px rgba(0,0,0,.18);
+    opacity:0;
+    pointer-events:none;
+    transform:translate(-50%, -4px); /* horizontally center */
+    transition:opacity .15s ease, transform .15s ease;
+    z-index:2000;
+  }
+
+  .info-icon:hover .info-tooltip{
+    opacity:1;
+    pointer-events:auto;
+    transform:translate(-50%, 0);
+  }
+    /* Left vertical toolbox – single continuous bar */
+  .toolbox{
+  position:absolute;
+  left:8px;
+  top:80px;      /* start below the + / - controls */
+  bottom:70px;   /* stop above the scale bar */
+  width:78px;    /* a bit narrower */
+  display:flex;
+  flex-direction:column;
+  align-items:stretch;
+  background:#f4f4f4;
+  border-radius:18px;
+  border:1px solid rgba(0,0,0,0.12);
+  box-shadow:0 8px 20px rgba(0,0,0,0.18);
+  overflow:hidden;
+  z-index:1100;
+}
+
+  .tool-btn{
+    border:none;
+    background:transparent;
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    justify-content:center;
+    gap:4px;
+    padding:12px 4px;
+    cursor:pointer;
+    font-size:11px;
+    color:#4b5563;
+    width:100%;
+  }
+
+  .tool-btn + .tool-btn{
+    border-top:1px solid rgba(0,0,0,0.08);
+  }
+
+  .tool-btn.active{
+    background:#e5e7eb;
+  }
+
+  .tool-icon{
+    width:30px;
+    height:30px;
+    border-radius:999px;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    overflow:hidden;
+    background:#ffffff;
+  }
+
+  .tool-icon-img{
+    width:100%;
+    height:100%;
+    object-fit:cover;
+    display:block;
+  }
+
+  .tool-label{
+    text-transform:uppercase;
+    font-size:9px;
+    letter-spacing:0.06em;
+    text-align:center;
+    line-height:1.2;
+  }
+
+  /* Slide-out info panel for toolbox */
+  .tool-panel{
+    position:absolute;
+    left:90px;
+    top:70px;
+    max-width:260px;
+    background:#ffffff;
+    border-radius:12px;
+    border:1px solid var(--border);
+    box-shadow:0 10px 30px rgba(0,0,0,.2);
+    padding:10px 12px;
+    z-index:1150;
+    opacity:0;
+    transform:translateX(-10px);
+    pointer-events:none;
+    transition:opacity .15s ease, transform .15s ease;
+  }
+
+  .tool-panel.visible{
+    opacity:1;
+    transform:translateX(0);
+    pointer-events:auto;
+  }
+
+  .tool-panel-header{
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+    margin-bottom:4px;
+  }
+
+  .tool-panel-title{
+    font-size:13px;
+    font-weight:600;
+  }
+
+  .tool-panel-close{
+    border:none;
+    background:transparent;
+    font-size:16px;
+    line-height:1;
+    cursor:pointer;
+    color:var(--muted);
+  }
+
+  .tool-panel-close:hover{
+    color:#0f172a;
+  }
+
+  .tool-panel-body{
+    font-size:11px;
+    color:var(--muted);
+  }
+
+    .chart-card-subtitle{
+    font-size:11px;
+    color:var(--muted);
+    margin:0 0 4px;
+  }
+
+  .chart-wrapper{
+    position:relative;
+    height:230px;  /* height of the chart */
+    margin-top:4px;
+  }
+
+  .chart-footer{
+    font-size:11px;
+    color:var(--muted);
+    margin-top:6px;
+  }
+
+  .chart-tabs{
+    margin-top:8px;
+    display:flex;
+    border-top:1px solid var(--border);
+  }
+
+  .chart-tab{
+    flex:1;
+    border:none;
+    background:#f8fafc;
+    padding:6px 8px;
+    font-size:11px;
+    cursor:pointer;
+    border-right:1px solid var(--border);
+    text-align:center;
+  }
+  .chart-tab:last-child{
+    border-right:none;
+  }
+  .chart-tab.active{
+    background:#ffffff;
+    font-weight:600;
+    color:#0f172a;
+    border-bottom:2px solid var(--accent);
+  }
+
+</style>
+</head>
+<body>
+<div class="app">
+
+  <!-- =======================
+       SECTION 2: Map canvas
+       ======================= -->
+  <div id="map"></div>
+  <!-- Left vertical toolbox -->
+    <nav class="toolbox" id="toolbox">
+    <!-- Permafrost change -->
+    <button class="tool-btn" data-tool="permafrost">
+      <span class="tool-icon">
+        <img src="images/perma_change.jpg"
+             alt="Permafrost change" class="tool-icon-img">
+      </span>
+      <span class="tool-label">Permafrost<br>change</span>
+    </button>
+
+    <!-- Land cover -->
+    <button class="tool-btn" data-tool="landcover">
+      <span class="tool-icon">
+        <img src="images/landuse.jpg"
+             alt="Land cover" class="tool-icon-img">
+      </span>
+      <span class="tool-label">Land<br>cover</span>
+    </button>
+
+    <!-- Snow cover (placeholder icon for now) -->
+    <button class="tool-btn" data-tool="snow">
+      <span class="tool-icon">
+        <!-- You can later replace this with e.g. images/snow.jpg -->
+        <span style="font-size:16px;">❄</span>
+      </span>
+      <span class="tool-label">Snow<br>cover</span>
+    </button>
+
+    <!-- Climate -->
+    <button class="tool-btn" data-tool="climate">
+      <span class="tool-icon">
+        <img src="images/climate.jpg"
+             alt="Climate" class="tool-icon-img">
+      </span>
+      <span class="tool-label">Climate</span>
+    </button>
+
+    <!-- Spacer pushes Explore/About to the bottom -->
+    <div style="flex:1;"></div>
+
+    <!-- Explore -->
+    <button class="tool-btn" data-tool="explore">
+      <span class="tool-icon">
+        <img src="images/explore.png"
+             alt="Explore" class="tool-icon-img">
+      </span>
+      <span class="tool-label">Explore</span>
+    </button>
+
+    <!-- About (placeholder icon for now) -->
+    <button class="tool-btn" data-tool="about">
+      <span class="tool-icon">
+        <span style="font-size:16px;">i</span>
+      </span>
+      <span class="tool-label">About</span>
+    </button>
+  </nav>
+
+  <!-- Slide-out panel for toolbox info -->
+  <div class="tool-panel" id="toolPanel" data-active="">
+    <div class="tool-panel-header">
+      <div class="tool-panel-title" id="toolPanelTitle"></div>
+      <button class="tool-panel-close" id="toolPanelClose" aria-label="Close">&times;</button>
+    </div>
+    <div class="tool-panel-body" id="toolPanelBody">
+      <!-- filled by JS -->
+    </div>
+  </div>
+
+  <!-- =======================
+       SECTION 3: Sidebar UI
+       ======================= -->
+  <aside class="sidebar">
+    <!-- Logo + title + description -->
+    <div class="logo-wrap">
+      <img src="images/illuq_logo.jpg" alt="ILLUQ logo" class="logo-img">
+    </div>
+
+    <h1>Participatory Mapping in the Arctic</h1>
+    <p class="small muted">
+      Description text — short explanation of the
+      mapping tool, the study region and how to interpret the layers below.
+    </p>
+
+    <hr class="divider">
+
+    <!-- Base maps -->
+    <div class="card" id="card-basemaps">
+      <h2>Base map</h2>
+      <div class="stack">
+        <label><input type="radio" name="basemap" value="osm"> OpenStreetMap Standard</label>
+        <label><input type="radio" name="basemap" value="imagery" checked> Esri World Imagery</label>
+      </div>
+    </div>
+
+    <!-- Display transparency -->
+    <div class="card" id="card-display">
+      <h2>Display</h2>
+      <label class="small muted">
+        Transparency: <strong id="opacPct">50%</strong>
+      </label>
+      <input type="range" id="opacity" min="0" max="100" step="1" value="50"
+             style="width:100%; margin-top:8px;">
+      <p class="small muted" style="margin-top:6px;">
+        Affects all participatory layers.
+      </p>
+ </div>
+
+    <!-- Participatory layers -->
+    <div class="card" id="card-participatory">
+      <h2>Mapping layers</h2>
+
+      <!-- Recreation Activities -->
+      <div class="legend-group" id="grpRecreationBlock">
+        <label class="legend-header">
+          <input type="checkbox" id="grpRecreation">
+          <span>Recreation activities</span>
+          <span class="info-icon">i
+            <span class="info-tooltip">
+              Text – describe which recreation activities were mapped
+              (e.g. hiking, skiing, snowmobiling, sailing, fishing, hunting)
+              and how to interpret them.
+            </span>
+          </span>
+        </label>
+
+        <label class="legend-item" data-style-key="hiking">
+          <input type="checkbox" id="lyrHiking">
+          <span class="legend-swatch"></span>
+          <span>Hiking areas</span>
+        </label>
+
+        <label class="legend-item" data-style-key="skiing">
+          <input type="checkbox" id="lyrSkiing">
+          <span class="legend-swatch"></span>
+          <span>Skiing areas</span>
+        </label>
+
+        <label class="legend-item" data-style-key="snow">
+          <input type="checkbox" id="lyrSnow">
+          <span class="legend-swatch"></span>
+          <span>Snowmobiling areas</span>
+        </label>
+
+        <label class="legend-item" data-style-key="sailing">
+          <input type="checkbox" id="lyrSailing">
+          <span class="legend-swatch"></span>
+          <span>Sailing areas</span>
+        </label>
+
+        <label class="legend-item" data-style-key="fishing">
+          <input type="checkbox" id="lyrFishing">
+          <span class="legend-swatch"></span>
+          <span>Fishing areas</span>
+        </label>
+
+        <label class="legend-item" data-style-key="hunting">
+          <input type="checkbox" id="lyrHunting">
+          <span class="legend-swatch"></span>
+          <span>Hunting areas</span>
+        </label>
+      </div>
+
+      <!-- Mobility Routes -->
+      <div class="legend-group" id="grpRoutesBlock">
+        <label class="legend-header">
+          <input type="checkbox" id="grpRoutes">
+          <span>Mobility Routes</span>
+          <span class="info-icon">i
+            <span class="info-tooltip">
+              Dummy text – describe here what is meant by long and short routes,
+              and how they were digitised for the project.
+            </span>
+          </span>
+        </label>
+
+        <label class="legend-item" data-style-key="routesLong">
+          <input type="checkbox" id="lyrRoutesLong">
+          <span class="legend-swatch"></span>
+          <span>Long routes</span>
+        </label>
+
+        <label class="legend-item" data-style-key="routesShort">
+          <input type="checkbox" id="lyrRoutesShort">
+          <span class="legend-swatch"></span>
+          <span>Short routes</span>
+        </label>
+      </div>
+
+      <!-- Infrastructure -->
+      <div class="legend-group" id="grpInfraBlock">
+        <label class="legend-header">
+          <input type="checkbox" id="grpInfra">
+          <span>Infrastructure</span>
+          <span class="info-icon">i
+            <span class="info-tooltip">
+              Dummy text – describe here the different infrastructure layers:
+              life-supporting services, critical infrastructure, contaminated or
+              dangerous sites, and damaged infrastructure.
+            </span>
+          </span>
+        </label>
+
+        <label class="legend-item" data-style-key="infraLife">
+          <input type="checkbox" id="lyrInfraLife">
+          <span class="legend-swatch"></span>
+          <span>Life-supporting infrastructure</span>
+        </label>
+
+        <label class="legend-item" data-style-key="infraCritical">
+          <input type="checkbox" id="lyrInfraCritical">
+          <span class="legend-swatch"></span>
+          <span>Critical infrastructure</span>
+        </label>
+
+        <label class="legend-item" data-style-key="infraContaminated">
+          <input type="checkbox" id="lyrInfraContaminated">
+          <span class="legend-swatch"></span>
+          <span>Contaminated sites</span>
+        </label>
+
+        <label class="legend-item" data-style-key="infraDangerous">
+          <input type="checkbox" id="lyrInfraDangerous">
+          <span class="legend-swatch"></span>
+          <span>Dangerous infrastructure</span>
+        </label>
+
+        <label class="legend-item" data-style-key="infraDamaged">
+          <input type="checkbox" id="lyrInfraDamaged">
+          <span class="legend-swatch"></span>
+          <span>Damaged infrastructure</span>
+        </label>
+      </div>
+      <!-- Place attachment -->
+      <div class="legend-group" id="grpPlaceBlock">
+        <label class="legend-header">
+          <input type="checkbox" id="grpPlace">
+          <span>Place attachment</span>
+          <span class="info-icon">i
+            <span class="info-tooltip">
+              Dummy text – describe here how favourite places, symbolic meanings
+              and protected areas express people’s attachment to place.
+            </span>
+          </span>
+        </label>
+
+        <label class="legend-item" data-style-key="favPlaces">
+          <input type="checkbox" id="lyrFavPlaces">
+          <span class="legend-swatch"></span>
+          <span>Favorite places</span>
+        </label>
+
+        <label class="legend-item" data-style-key="symbolicMeaning">
+          <input type="checkbox" id="lyrSymbolic">
+          <span class="legend-swatch"></span>
+          <span>Symbolic meaning</span>
+        </label>
+
+        <label class="legend-item" data-style-key="protectedAreas">
+          <input type="checkbox" id="lyrProtected">
+          <span class="legend-swatch"></span>
+          <span>Protected areas</span>
+        </label>
+      </div>
+
+      <!-- Science & education -->
+      <div class="legend-group" id="grpScienceBlock">
+        <label class="legend-header">
+          <input type="checkbox" id="grpScience">
+          <span>Science &amp; education</span>
+          <span class="info-icon">i
+            <span class="info-tooltip">
+              Dummy text – describe here how scientific activities and
+              observation points are represented in the mapping.
+            </span>
+          </span>
+        </label>
+
+        <label class="legend-item" data-style-key="scienceObs">
+          <input type="checkbox" id="lyrScienceObs">
+          <span class="legend-swatch"></span>
+          <span>Science observation points</span>
+        </label>
+
+        <label class="legend-item" data-style-key="scienceActivities">
+          <input type="checkbox" id="lyrScienceActivities">
+          <span class="legend-swatch"></span>
+          <span>Scientific activities</span>
+        </label>
+      </div>
+
+      <!-- Climate change perceptions -->
+      <div class="legend-group" id="grpClimateBlock">
+        <label class="legend-header">
+          <input type="checkbox" id="grpClimate">
+          <span>Climate change perceptions</span>
+          <span class="info-icon">i
+            <span class="info-tooltip">
+              Dummy text – describe here which types of perceived changes are
+              mapped (summer / winter conditions and negative impacts).
+            </span>
+          </span>
+        </label>
+
+        <label class="legend-item" data-style-key="ccSummer">
+          <input type="checkbox" id="lyrCCSummer">
+          <span class="legend-swatch"></span>
+          <span>During summer season</span>
+        </label>
+
+        <label class="legend-item" data-style-key="ccWinter">
+          <input type="checkbox" id="lyrCCWinter">
+          <span class="legend-swatch"></span>
+          <span>During winter season</span>
+        </label>
+
+        <label class="legend-item" data-style-key="ccNegative">
+          <input type="checkbox" id="lyrCCNegative">
+          <span class="legend-swatch"></span>
+          <span>Negative impact</span>
+        </label>
+      </div>
+
+      <div class="legend-note small">
+        Tip: click a group’s checkbox to toggle all its layers.
+      </div>
+    </div>
+
+        <!-- Hiking statistics chart (shown when Hiking areas layer is active) -->
+    <div class="card" id="hikingStatsCard" style="display:none;">
+      <h2>Hiking area – background</h2>
+      <p class="chart-card-subtitle">
+        For full-screen view, hover the chart and switch between themes using the tabs.
+      </p>
+
+      <div class="chart-wrapper">
+        <canvas id="hikingChart"></canvas>
+      </div>
+
+      <p class="chart-footer">
+        Discover more information by exploring the tabs below
+      </p>
+
+      <div class="chart-tabs">
+        <button class="chart-tab active" data-tab="protected">Protected area</button>
+        <button class="chart-tab" data-tab="risk">Risk areas</button>
+        <button class="chart-tab" data-tab="attachment">Place attachment</button>
+      </div>
+    </div>
+
+
+    <!-- Data sources + methodology -->
+    <div class="card" id="card-sources">
+      <h2>Data sources &amp; methodology</h2>
+      <p class="small">
+        • <strong>SVA limits &amp; layers</strong>: local shapefiles (zipped) loaded via <code>shp.js</code>.<br>
+        • <strong>Countries</strong>: datasets/geo-countries (GeoJSON).<br>
+        • <strong>Tiles</strong>: OSM / Esri.<br>
+      </p>
+      <p class="small muted">
+        Read more about the methodology
+        <a href="https://example.com/methodology" target="_blank" rel="noopener">here</a>.
+        <!-- Replace the URL above with your real methodology link -->
+      </p>
+    </div>
+
+    <p class="small muted">
+      &copy; You &amp; collaborators • &copy; OpenStreetMap &amp; contributors • &copy; Esri
+    </p>
+  </aside>
+</div> <!-- end .app -->
+
+<!-- =======================
+     SECTION 4: Scripts
+     ======================= -->
+<script>
+/* ---------------------------------------------
+   SECTION 4.1: Map setup & base map layers
+   --------------------------------------------- */
+
+console.log("MAP VERSION: SVALBARD ONLY, NO AUTO-ZOOM");
+
+
+// 1) Create the Leaflet map
+const map = L.map('map', {
+  center: [78.2217, 15.3555],  // center from map.getCenter()
+  zoom: 9                     // zoom from map.getZoom()
+});
+
+// 2) Optional: coordinate readout if you add <span id="coordVal">
+const coordValEl = document.getElementById('coordVal');
+if (coordValEl){
+  map.on('mousemove', (e) => {
+    coordValEl.textContent =
+      `${e.latlng.lat.toFixed(4)}, ${e.latlng.lng.toFixed(4)}`;
+  });
+}
+
+// (S4.1.a) Base map definitions
+const basemaps = {
+  osm: L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {maxZoom:19, attribution:'&copy; OpenStreetMap'}),
+  voyager: L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {subdomains:'abcd',maxZoom:19,attribution:'&copy; OpenStreetMap & CARTO'}),
+  imagery: L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {maxZoom:19,attribution:'Imagery &copy; Esri'})
+};
+basemaps.imagery.addTo(map);
+setTimeout(() => map.invalidateSize(), 0);
+
+
+L.control.scale({imperial:false}).addTo(map);
+
+// (S4.1.c) Hillshade overlay (Esri)
+const hillshade = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Hillshade/MapServer/tile/{z}/{y}/{x}', {
+  maxZoom:18, opacity:0.5, attribution:'Hillshade &copy; Esri'
+});
+
+/* ---------------------------------------------
+   SECTION 4.2: Non-participatory overlays (kept)
+   --------------------------------------------- */
+// (S4.2.a) Countries borders
+let countriesLayer = null;
+fetch('https://raw.githubusercontent.com/datasets/geo-countries/master/data/countries.geojson')
+  .then(r=>r.json())
+  .then(geo=>{
+    countriesLayer = L.geoJSON(geo, {
+      style:{color:'#6b7280',weight:0.8,fill:false},
+      onEachFeature:(f, layer)=>layer.bindTooltip(f.properties.ADMIN || 'Country', {sticky:true})
+    });
+  });
+
+// (S4.2.b) Sample cities
+const citiesLayer = L.layerGroup([
+  L.circleMarker([59.3293, 18.0686], {radius:5}).bindPopup('<b>Stockholm</b>'),
+  L.circleMarker([60.1699, 24.9384], {radius:5}).bindPopup('<b>Helsinki</b>'),
+  L.circleMarker([55.6761, 12.5683], {radius:5}).bindPopup('<b>Copenhagen</b>'),
+  L.circleMarker([59.9139, 10.7522], {radius:5}).bindPopup('<b>Oslo</b>')
+]);
+
+/* ---------------------------------------------
+   SECTION 4.3: Participatory layers (your shapefiles)
+   Loader utilities + style presets + toggles
+   --------------------------------------------- */
+
+// (S4.3.a) File paths (ZIPs containing .shp+.dbf+.shx+.prj)
+const PATHS = {
+  hiking:  'SVA/0_Hiking/Hiking_data_all_join.zip',
+  skiing:  'SVA/1_Skiing/skiing_data_join.zip',
+  snow:    'SVA/2_Snowmobiling/snowmobiling_data_join.zip',
+  sailing: 'SVA/3_Sailing/sailing_data_join.zip',
+  fishing: 'SVA/5_Fishing/fishing_data_join.zip',
+  hunting: 'SVA/6_Hunting/Hunting_data_join.zip',
+
+  routesLong:  'SVA/7_Routes/routes_long_data_join.zip',
+  routesShort: 'SVA/7_Routes/routes_data_join.zip',
+
+  infraLife:        'SVA/8_Infra_life_supporting/8_Infra_life_supp.zip',
+  infraCritical:    'SVA/9_Infra_critical/9_Infrastructure_critical.zip',
+  infraContaminated:'SVA/10_Contaminated_sites/contaminated_sites_data_join.ZIP',
+  infraDangerous:   'SVA/11_Dangerous_infrastructure/dangerous_infra_data_join.zip',
+  infraDamaged:     'SVA/12_Damaged_infrastructure/damaged_infrastructure_data_join.zip',
+
+  favPlaces:        'SVA/13_Favourite_Places/favourite_places_data_join.zip',
+  symbolicMeaning:  'SVA/14_Symbolic_places/symbolic_meaning_data_join.zip',
+  protectedAreas:   'SVA/15_Protected_Areas/protected_areas_data_join.zip',
+
+  scienceObs:       'SVA/16_Observation_points/observation_points_data_join.zip',
+  scienceActivities:'SVA/17_Scientific_Activities/scientific_actitivies_join.zip',
+
+  ccSummer:   'SVA/18_Changes/changes_data_summer_join.zip',
+  ccWinter:   'SVA/18_Changes/changes_data_winter_join.zip',
+  ccNegative: 'SVA/18_Changes/changes_negative_impact_join.zip',
+
+  // Land-cover GeoTIFF (single-band classified raster)
+  landcoverRaster: 'SVA/LUC/ESACCI_LCU_2016_2024_500m.tif'
+};
+
+// (S4.3.b) Styles (colors + transparency)
+// Polygons default: fillOpacity 0.35; Lines: weight 3, opacity 0.9
+// Polygons default: fillOpacity 0.4; Lines: weight 3, opacity 0.9
+const STYLE = {
+  // Recreation
+  hiking: {               // light green
+    color:'#15803d',
+    fillColor:'#bbf7d0',
+    weight:2,
+    dashArray:null,
+    fillOpacity:0.4,
+    opacity:1
+  },
+  skiing: {               // white with light grey hatch
+    color:'#9ca3af',
+    fillColor:'#ffffff',
+    weight:2,
+    dashArray:'4 4',
+    fillOpacity:0.4,
+    opacity:1
+  },
+  snow: {                 // light grey
+    color:'#6b7280',
+    fillColor:'#e5e7eb',
+    weight:2,
+    dashArray:'2 6',
+    fillOpacity:0.4,
+    opacity:1
+  },
+  sailing: {              // light blue
+    color:'#2563eb',
+    fillColor:'#bfdbfe',
+    weight:1.5,
+    fillOpacity:0.4,
+    opacity:1
+  },
+  fishing: {              // darker pale blue
+    color:'#1d4ed8',
+    fillColor:'#93c5fd',
+    weight:1.5,
+    fillOpacity:0.4,
+    opacity:1
+  },
+  hunting: {              // light pale brown
+    color:'#b45309',
+    fillColor:'#f5e7d0',
+    weight:1.5,
+    fillOpacity:0.4,
+    opacity:1
+  },
+
+  // Routes
+  routesLong:  {          // solid black
+    color:'#111827',
+    weight:3,
+    opacity:0.9
+  },
+  routesShort: {          // dashed pale red
+    color:'#f97373',
+    weight:3,
+    dashArray:'6 4',
+    opacity:0.9
+  },
+
+  // Infrastructure
+  lifeInfraPlaceholder: null, // just to visually separate groups, ignore
+
+  infraLife: {            // dark orange
+    color:'#c2410c',
+    fillColor:'#fed7aa',
+    weight:1.5,
+    fillOpacity:0.4,
+    opacity:1
+  },
+  infraCritical: {        // dark red
+    color:'#b91c1c',
+    fillColor:'#fecaca',
+    weight:1.5,
+    fillOpacity:0.4,
+    opacity:1
+  },
+  infraContaminated: {    // black
+    color:'#111827',
+    fillColor:'#9ca3af',
+    weight:1.5,
+    fillOpacity:0.4,
+    opacity:1
+  },
+  infraDangerous: {       // pale pink
+    color:'#e11d48',
+    fillColor:'#ffe4e6',
+    weight:1.5,
+    fillOpacity:0.4,
+    opacity:1
+  },
+  infraDamaged: {         // dark yellow
+    color:'#a16207',
+    fillColor:'#facc15',
+    weight:1.5,
+    fillOpacity:0.4,
+    opacity:1
+  },
+
+  // Place attachment
+  favPlaces: {            // pale purple
+    color:'#7c3aed',
+    fillColor:'#e9d5ff',
+    weight:1.5,
+    fillOpacity:0.4,
+    opacity:1
+  },
+  symbolicMeaning: {      // pale pink
+    color:'#be123c',
+    fillColor:'#ffe4e6',
+    weight:1.5,
+    fillOpacity:0.4,
+    opacity:1
+  },
+  protectedAreas: {       // dark green
+    color:'#14532d',
+    fillColor:'#bbf7d0',
+    weight:1.5,
+    fillOpacity:0.4,
+    opacity:1
+  },
+
+  // Science & education (points)
+  scienceObs: {
+    color:'#7c3aed',
+    fillColor:'#ede9fe',
+    weight:2,
+    fillOpacity:0.7,
+    opacity:1
+  },
+  scienceActivities: {
+    color:'#4f46e5',
+    fillColor:'#e0e7ff',
+    weight:2,
+    fillOpacity:0.7,
+    opacity:1
+  },
+
+  // Climate change perceptions
+  ccSummer: {             // dark gold
+    color:'#b45309',
+    fillColor:'#facc15',
+    weight:1.5,
+    fillOpacity:0.4,
+    opacity:1
+  },
+  ccWinter: {             // dark blue
+    color:'#1e3a8a',
+    fillColor:'#bfdbfe',
+    weight:1.5,
+    fillOpacity:0.4,
+    opacity:1
+  },
+  ccNegative: {           // negative impact (red)
+    color:'#dc2626',
+    fillColor:'#fee2e2',
+    weight:1.5,
+    fillOpacity:0.4,
+    opacity:1
+  },
+
+  // kept for reference
+  limits: { color:'#111827', weight:2, fill:false, dashArray:'6 4', opacity:1 }
+};
+
+// (S4.3.c) Land-cover classes for legend + raster colouring
+const LANDCOVER_CLASSES = {
+  1:  { label: "Water",                                                                  color: "#0096FF" },
+  2:  { label: "Shallow water/abundant macrophytes",                                    color: "#75CFF0" },
+  3:  { label: "Wetland, permanent",                                                    color: "#54B532" },
+  4:  { label: "Wet to aquatic tundra (seasonal), abundant moss",                       color: "#A0D16C" },
+  5:  { label: "Moist to wet tundra, abundant moss, prostrate shrubs",                  color: "#6C964C" },
+  6:  { label: "Dry to moist tundra, partially barren, prostrate shrubs",               color: "#D9B88F" },
+  7:  { label: "Dry tundra, abundant lichen, prostrate shrubs",                         color: "#EEC56E" },
+  8:  { label: "Dry to aquatic tundra, dwarf shrubs",                                   color: "#8DC27F" },
+  9:  { label: "Dry to moist tundra, prostrate to low shrubs",                          color: "#A7D046" },
+  10: { label: "Moist tundra, abundant moss, prostrate to low shrubs",                  color: "#91E600" },
+  11: { label: "Moist tundra, abundant moss, dwarf and low shrubs",                     color: "#78AB46" },
+  12: { label: "Moist tundra, dense dwarf and low shrubs (& sparse tree cover)",        color: "#588F44" },
+  13: { label: "Moist to wet tundra, dense dwarf and low shrubs (& sparse tree cover)", color: "#4F7E42" },
+  14: { label: "Moist tundra, low shrubs",                                              color: "#B6B76D" },
+  15: { label: "Dry to moist tundra, partially barren",                                 color: "#8F6A55" },
+  16: { label: "Moist tundra, abundant forbs, dwarf to tall shrubs",                    color: "#DB7B7B" },
+  17: { label: "Recently burned or flooded, partially barren",                          color: "#FF2400" },
+  18: { label: "Forest (deciduous) with dwarf to tall shrubs",                          color: "#A35252" },
+  19: { label: "Forest (mixed) with dwarf to tall shrubs",                              color: "#6A3E79" },
+  20: { label: "Forest (needle-leaf) with dwarf and low shrubs",                        color: "#5A2A80" },
+  21: { label: "Partially barren",                                                      color: "#BCAC5D" },
+  22: { label: "Snow/ice",                                                              color: "#FFFFFF" },
+  23: { label: "Other (incl. shadow)",                                                  color: "#2E2E2E" }
+};
+
+
+/* Paint swatches in the sidebar using STYLE colors */
+let currentOpacity = 0.5; // 0% transparency (fully opaque) by default
+
+function paintSwatches(){
+  document.querySelectorAll('.legend-item').forEach(el => {
+    const key = el.dataset.styleKey;
+    const st = STYLE[key] || {};
+    const sw = el.querySelector('.legend-swatch');
+    const base = st.fillColor || st.color || '#999';
+    sw.style.opacity = String(currentOpacity);
+    if (!st.fillColor && st.color){
+      sw.style.background = 'transparent';
+      sw.style.border = `2px solid ${st.color}`;
+    } else {
+      sw.style.background = base;
+      sw.style.border = '1px solid rgba(0,0,0,.15)';
+    }
+  });
+}
+paintSwatches();
+
+// Apply current opacity to any GeoJSON layer (polygons, lines, points)
+function applyOpacityToLayer(layer, opacity) {
+  if (!layer) return;
+  layer.eachLayer(l => {
+    if (!l.setStyle) return;
+    const opt = { ...l.options };
+    if (typeof opt.opacity === 'number') {
+      opt.opacity = opacity;
+    }
+    if (typeof opt.fillOpacity === 'number') {
+      opt.fillOpacity = opacity;
+    }
+    l.setStyle(opt);
+  });
+}
+
+// === Land-cover GeoTIFF handling =====================================
+
+// State for the raster layer
+let landCoverLayer = null;
+let landCoverLoading = false;
+let landCoverVisible = false;
+
+// Map a single-band value to a hex colour
+function landCoverValueToColor(value){
+  const cls = LANDCOVER_CLASSES[value];
+  return cls ? cls.color : null;   // null → transparent / not drawn
+}
+
+// Load the GeoTIFF once, lazily
+function loadLandCoverRaster(){
+  if (landCoverLayer || landCoverLoading) return;
+  landCoverLoading = true;
+
+  const parseFn = window.parseGeoraster || window.parse_georaster;
+  if (!parseFn){
+    console.error('GeoRaster parser not found – check georaster script tags.');
+    landCoverLoading = false;
+    return;
+  }
+
+  // Build an absolute URL so Web Workers can fetch it
+  const urlAbs = new URL(PATHS.landcoverRaster, window.location.href).href;
+  console.log('Loading land-cover raster from', urlAbs);
+
+  parseFn(urlAbs)
+    .then(georaster => {
+      landCoverLayer = new GeoRasterLayer({
+        georaster,
+        opacity: currentOpacity,
+        // Raster is single-band: values[0] is the class code
+        pixelValuesToColorFn: values => landCoverValueToColor(values[0]),
+        // Higher resolution = lighter / faster (try 256, 512, etc.)
+        resolution: 256
+      });
+
+      landCoverLoading = false;
+      if (landCoverVisible) {
+        landCoverLayer.addTo(map);
+      }
+      console.log('✅ Land-cover GeoTIFF loaded.');
+    })
+    .catch(err => {
+      landCoverLoading = false;
+      console.error('❌ Failed to load land-cover GeoTIFF', err);
+      alert('Could not load land-cover layer. See console for details.');
+    });
+}
+
+// Turn visibility on/off (called from the checkbox)
+function setLandCoverVisibility(visible){
+  landCoverVisible = visible;
+  if (landCoverLayer){
+    if (visible) {
+      landCoverLayer.addTo(map);
+    } else {
+      map.removeLayer(landCoverLayer);
+    }
+  } else if (visible){
+    // kick off lazy loading
+    loadLandCoverRaster();
+  }
+}
+
+// Build HTML for the land-cover panel (legend + toggle)
+function buildLandCoverPanelHtml(){
+  let rows = '';
+  Object.keys(LANDCOVER_CLASSES)
+    .map(k => Number(k))
+    .sort((a, b) => a - b)
+    .forEach(code => {
+      const { label, color } = LANDCOVER_CLASSES[code];
+      rows += `
+        <tr class="lc-legend-row">
+          <td style="width:26px;">
+            <span class="lc-swatch" style="background:${color};"></span>
+          </td>
+          <td>${code}. ${label}</td>
+        </tr>`;
+    });
+
+  return `
+    <p class="small muted" style="margin-bottom:6px;">
+      Land-cover classes from the ESA CCI Permafrost land-cover product.
+    </p>
+    <label class="small" style="display:flex;align-items:center;gap:6px;margin-bottom:8px;">
+      <input type="checkbox" id="lcToggle">
+      <span>Show land-cover layer</span>
+    </label>
+    <div class="small" style="max-height:220px;overflow:auto;margin-top:4px;">
+      <table class="lc-legend-table"><tbody>
+        ${rows}
+      </tbody></table>
+    </div>`;
+}
+
+// After we inject the panel HTML, wire up the checkbox
+function wireLandCoverPanelControls(){
+  const chk = document.getElementById('lcToggle');
+  if (!chk) return;
+
+  chk.checked = landCoverVisible;
+  chk.addEventListener('change', () => {
+    setLandCoverVisibility(chk.checked);
+  });
+}
+
+
+
+
+// (S4.3.c) Generic loader: shapefile ZIP -> Leaflet layer
+// ---------- Robust vector loading (GeoJSON or Shapefile ZIP) ----------
+async function loadVector(url){
+  const lower = url.toLowerCase();
+  if (lower.endsWith('.geojson') || lower.endsWith('.json')) {
+    // Bust cache to avoid 304 responses with empty bodies
+    const bust = (url.includes('?') ? '&' : '?') + '_=' + Date.now();
+    const r = await fetch(url + bust, { cache: 'no-store' });
+    if (!r.ok) throw new Error(`HTTP ${r.status} for ${url}`);
+    return await r.json();
+  } else {
+    // assume .zip shapefile
+    return await shp(url);
+  }
+}
+
+// Accept FC, Feature, or raw geometry and normalize to a FeatureCollection
+function normalizeToFC(g){
+  if (!g) return null;
+  if (g.data) return normalizeToFC(g.data);
+  if (g.type === 'FeatureCollection' && Array.isArray(g.features)) return g;
+  if (g.type === 'Feature' && g.geometry)
+    return { type:'FeatureCollection', features:[g] };
+  if (g.type && g.coordinates)
+    return { type:'FeatureCollection', features:[{ type:'Feature', properties:{}, geometry:g }] };
+  if (Array.isArray(g.features))
+    return { type:'FeatureCollection', features:g.features };
+  return null;
+}
+
+// Try candidates until one loads
+async function firstWorking(urls){
+  const list = Array.isArray(urls) ? urls : [urls];
+  let lastErr = null;
+  for (const u of list){
+    try{
+      const raw = await loadVector(u);
+      const fc  = normalizeToFC(raw);
+      if (fc && fc.features && fc.features.length) return { fc, url:u };
+      throw new Error(`Loaded but not a usable FeatureCollection from ${u}`);
+    }catch(e){
+      console.warn(`Failed loading ${u}:`, e);
+      lastErr = e;
+    }
+  }
+  throw lastErr || new Error('No candidate URL worked');
+}
+
+const loaded = {}; // id -> L.GeoJSON
+
+async function ensureLayer(id, urlOrList, style){
+  if (loaded[id]) return loaded[id];
+  try{
+    const { fc, url } = await firstWorking(urlOrList);
+    const layer = L.geoJSON(fc, {
+      style,
+      pointToLayer: (f, latlng) => L.circleMarker(latlng, { radius:5, ...style })
+    });
+    applyOpacityToLayer(layer, currentOpacity);
+    loaded[id] = layer;
+    console.log(`✅ Loaded '${id}' (${fc.features.length} features) from ${url}`);
+    return layer;
+  }catch(err){
+    console.error(`❌ Could not load '${id}' from`, urlOrList, err);
+    alert(`Could not load "${id}". Open DevTools → Console for details.`);
+  }
+}
+
+/* ---------------------------------------------
+   SECTION 4.4: Wire up UI controls (sidebar)
+   --------------------------------------------- */
+// (S4.4.a) Base map radio
+document.querySelectorAll('input[name="basemap"]').forEach(r=>{
+  r.addEventListener('change', ()=>{
+    const v = r.value;
+    Object.values(basemaps).forEach(l => map.removeLayer(l));
+    basemaps[v].addTo(map);
+  });
+});
+
+
+// Global opacity slider
+const opSlider = document.getElementById('opacity');
+const opPct = document.getElementById('opacPct');
+
+opSlider.addEventListener('input', () => {
+  const transparency = Number(opSlider.value) / 100; // 0–1
+  currentOpacity = 1 - transparency;                 // 0% → 1.0, 100% → 0.0
+  opPct.textContent = `${opSlider.value}%`;
+
+  // update all loaded participatory vector layers
+  Object.entries(loaded).forEach(([id, layer]) => {
+    if (id !== 'limits') applyOpacityToLayer(layer, currentOpacity);
+  });
+
+  // update land-cover raster opacity as well
+  if (landCoverLayer && typeof landCoverLayer.setOpacity === 'function') {
+    landCoverLayer.setOpacity(currentOpacity);
+  }
+
+  paintSwatches();
+});
+
+// (S4.4.c) Participatory toggles (on-demand loading)
+// Child toggle map (unchanged ids)
+// Child toggle map
+const toggleMap = [
+  ['lyrHiking',       'hiking',       PATHS.hiking,       STYLE.hiking],
+  ['lyrSkiing',       'skiing',       PATHS.skiing,       STYLE.skiing],
+  ['lyrSnow',         'snow',         PATHS.snow,         STYLE.snow],
+  ['lyrSailing',      'sailing',      PATHS.sailing,      STYLE.sailing],
+  ['lyrFishing',      'fishing',      PATHS.fishing,      STYLE.fishing],
+  ['lyrHunting',      'hunting',      PATHS.hunting,      STYLE.hunting],
+
+  ['lyrRoutesLong',   'routesLong',   PATHS.routesLong,   STYLE.routesLong],
+  ['lyrRoutesShort',  'routesShort',  PATHS.routesShort,  STYLE.routesShort],
+
+  ['lyrInfraLife',        'infraLife',        PATHS.infraLife,        STYLE.infraLife],
+  ['lyrInfraCritical',    'infraCritical',    PATHS.infraCritical,    STYLE.infraCritical],
+  ['lyrInfraContaminated','infraContaminated',PATHS.infraContaminated,STYLE.infraContaminated],
+  ['lyrInfraDangerous',   'infraDangerous',   PATHS.infraDangerous,   STYLE.infraDangerous],
+  ['lyrInfraDamaged',     'infraDamaged',     PATHS.infraDamaged,     STYLE.infraDamaged],
+
+  ['lyrFavPlaces',        'favPlaces',        PATHS.favPlaces,        STYLE.favPlaces],
+  ['lyrSymbolic',         'symbolicMeaning',  PATHS.symbolicMeaning,  STYLE.symbolicMeaning],
+  ['lyrProtected',        'protectedAreas',   PATHS.protectedAreas,   STYLE.protectedAreas],
+
+  ['lyrScienceObs',       'scienceObs',       PATHS.scienceObs,       STYLE.scienceObs],
+  ['lyrScienceActivities','scienceActivities',PATHS.scienceActivities,STYLE.scienceActivities],
+
+  ['lyrCCSummer',         'ccSummer',         PATHS.ccSummer,         STYLE.ccSummer],
+  ['lyrCCWinter',         'ccWinter',         PATHS.ccWinter,         STYLE.ccWinter],
+  ['lyrCCNegative',       'ccNegative',       PATHS.ccNegative,       STYLE.ccNegative]
+];
+
+
+// Wire children
+toggleMap.forEach(([chkId, id, url, style]) => {
+  const checkbox = document.getElementById(chkId);
+
+  checkbox.addEventListener('change', async (e) => {
+    console.log('[Layer toggle]', id, 'checked =', e.target.checked);
+
+    const layer = await ensureLayer(id, url, style);
+    if (!layer) {
+      console.warn('[Layer toggle]', id, 'failed to load layer');
+      return;
+    }
+
+    if (e.target.checked) {
+      console.log('[Layer toggle]', id, '→ adding to map');
+      layer.addTo(map);
+    } else {
+      console.log('[Layer toggle]', id, '→ removing from map');
+      map.removeLayer(layer);
+    }
+
+    // 👇 Extra: show / hide chart when Hiking layer is toggled
+    if (id === 'hiking') {
+      console.log('[Hiking] checkbox changed, calling chart show/hide');
+      if (e.target.checked) {
+        showHikingStats();
+      } else {
+        hideHikingStats();
+      }
+    }
+
+    syncParents();
+  });
+});
+
+
+// Group helpers
+const groups = {
+  grpRecreation: ['lyrHiking','lyrSkiing','lyrSnow','lyrSailing','lyrFishing','lyrHunting'],
+  grpRoutes:     ['lyrRoutesLong','lyrRoutesShort'],
+  grpInfra:      ['lyrInfraLife','lyrInfraCritical','lyrInfraContaminated','lyrInfraDangerous','lyrInfraDamaged'],
+  grpPlace:      ['lyrFavPlaces','lyrSymbolic','lyrProtected'],
+  grpScience:    ['lyrScienceObs','lyrScienceActivities'],
+  grpClimate:    ['lyrCCSummer','lyrCCWinter','lyrCCNegative']
+};
+
+
+function toggleGroup(parentId){
+  const parent = document.getElementById(parentId);
+  parent.addEventListener('change', async () => {
+    const targetState = parent.checked;
+    for (const cid of groups[parentId]){
+      const cb = document.getElementById(cid);
+      if (cb.checked !== targetState){
+        cb.checked = targetState;
+        cb.dispatchEvent(new Event('change'));
+      }
+    }
+    parent.indeterminate = false;
+  });
+}
+
+// Set indeterminate when some (not all) children are on
+function syncParents(){
+  Object.entries(groups).forEach(([pid, kids])=>{
+    const p = document.getElementById(pid);
+    const on = kids.filter(id => document.getElementById(id).checked).length;
+    p.checked = (on === kids.length);
+    p.indeterminate = (on > 0 && on < kids.length);
+  });
+}
+
+toggleGroup('grpRecreation');
+toggleGroup('grpRoutes');
+toggleGroup('grpInfra');
+toggleGroup('grpPlace');
+toggleGroup('grpScience');
+toggleGroup('grpClimate');
+syncParents();
+/* ---------------------------------------------
+   SECTION 4.5: Left toolbox → info panel
+   --------------------------------------------- */
+
+const TOOL_INFO = {
+  permafrost: {
+    title: 'Permafrost change',
+    body: 'Dummy text – later this panel can hold legends and explanations for permafrost change layers (data source, time period, interpretation, etc.).'
+  },
+  landcover: {
+    title: 'Land cover',
+    body: 'Dummy text – summary of land-cover datasets and their classes. We can attach legends and layer toggles here in the next steps.'
+  },
+  snow: {
+    title: 'Snow cover',
+    body: 'Dummy text – information about seasonal or long-term snow cover products and how to read the maps.'
+  },
+  climate: {
+    title: 'Climate',
+    body: 'Dummy text – climate indicators (temperature, precipitation, indices) that you may bring into the map.'
+  },
+  explore: {
+    title: 'Explore',
+    body: 'Dummy text – ideas for exploration tools (search, bookmarks, stories) can be linked from this panel.'
+  },
+  about: {
+    title: 'About',
+    body: 'Dummy text – short overview of the ILLUQ project, partners and links to full methodology and reports.'
+  }
+};
+
+const toolboxButtons = document.querySelectorAll('.toolbox .tool-btn');
+const toolPanel = document.getElementById('toolPanel');
+const toolPanelTitle = document.getElementById('toolPanelTitle');
+const toolPanelBody = document.getElementById('toolPanelBody');
+const toolPanelClose = document.getElementById('toolPanelClose');
+
+toolboxButtons.forEach(btn => {
+  btn.addEventListener('click', () => {
+    const id = btn.dataset.tool;
+    const isActive = toolPanel.dataset.active === id;
+
+    // If clicking the same button again → close panel
+    if (isActive) {
+      toolPanel.classList.remove('visible');
+      toolPanel.dataset.active = '';
+      toolboxButtons.forEach(b => b.classList.remove('active'));
+      return;
+    }
+
+    // Activate new button
+    toolboxButtons.forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+
+    const info = TOOL_INFO[id];
+    if (info) {
+      toolPanelTitle.textContent = info.title;
+
+      if (id === 'landcover') {
+        // special panel with toggle + legend
+        toolPanelBody.innerHTML = buildLandCoverPanelHtml();
+        wireLandCoverPanelControls();
+      } else {
+        // default: plain text from TOOL_INFO
+        toolPanelBody.innerHTML = info.body.replace(/\n/g, '<br>');
+      }
+
+      toolPanel.dataset.active = id;
+      toolPanel.classList.add('visible');
+    }
+  });
+});
+
+toolPanelClose.addEventListener('click', () => {
+  toolPanel.classList.remove('visible');
+  toolPanel.dataset.active = '';
+  toolboxButtons.forEach(b => b.classList.remove('active'));
+});
+
+/* ---------------------------------------------
+   SECTION 4.6: Hiking layer statistics chart
+   --------------------------------------------- */
+
+// 1) Static numbers from your analysis
+const HIKING_STATS = {
+  totalAreaKm2: 1322.60,
+  protectedPct: 34.89,
+  contaminated: { total: 53, pctHiking: 96.23, pctProtected: 37.74 },
+  favourite:    { total: 53, pctHiking: 75.47, pctProtected: 35.85 },
+  symbolic:     { total: 18, pctHiking: 66.67, pctProtected: 11.11 }
+};
+
+// 2) Chart.js defaults and basic sanity check
+if (window.Chart) {
+  console.log('[Chart] Chart.js detected, version:', Chart.version);
+  Chart.defaults.font.family = 'Corbel, "Segoe UI", Roboto, Arial, sans-serif';
+  Chart.defaults.font.size = 11;
+} else {
+  console.error('[Chart] Chart.js NOT loaded – charts will not work');
+}
+
+const hikingStatsCard = document.getElementById('hikingStatsCard');
+// Place the hiking stats panel next to the sidebar
+// Place the hiking stats panel next to the LEFT toolbox (Permafrost / Land cover / etc.)
+function positionHikingStatsCard(){
+  if (!hikingStatsCard) return;
+
+  const toolbox = document.getElementById('toolbox');    // left vertical bar
+  const gap      = 12;                                   // tiny space between toolbox and card
+  const cardWidth = 360;
+
+  hikingStatsCard.style.position = 'fixed';
+  hikingStatsCard.style.width    = cardWidth + 'px';
+
+  if (toolbox){
+    const tbRect = toolbox.getBoundingClientRect();
+
+    // Align the top with the toolbox top
+    hikingStatsCard.style.top       = `${tbRect.top}px`;
+    hikingStatsCard.style.left      = `${tbRect.right + gap}px`;
+    hikingStatsCard.style.maxHeight = `calc(100vh - ${tbRect.top + 16}px)`;
+
+    console.log('[Hiking] positioned stats card next to toolbox at left =',
+                hikingStatsCard.style.left, 'top =', hikingStatsCard.style.top);
+  } else {
+    // Fallback: if toolbox not found, put it in a safe default position
+    console.warn('[Hiking] #toolbox not found, using default position');
+    hikingStatsCard.style.top       = '16px';
+    hikingStatsCard.style.left      = '16px';
+    hikingStatsCard.style.maxHeight = 'calc(100vh - 32px)';
+  }
+}
+
+const chartTabs       = document.querySelectorAll('#hikingStatsCard .chart-tab');
+let hikingChart       = null;
+
+// 3) Config builders for each tab -------------------------
+
+function buildProtectedChartConfig(){
+  const protectedPct    = HIKING_STATS.protectedPct;
+  const notProtectedPct = 100 - protectedPct;
+
+  return {
+    type: 'pie',
+    data: {
+      labels: ['Protected hiking area', 'Other hiking area'],
+      datasets: [{
+        data: [protectedPct, notProtectedPct],
+        // Just some contrasting colours
+        backgroundColor: ['#16a34a','#d1fae5']
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: { position: 'right' },
+        tooltip: {
+          callbacks: {
+            label: ctx => `${ctx.label}: ${ctx.parsed.toFixed(1)}%`
+          }
+        },
+        title: {
+          display: true,
+          text: `Protected area within hiking (${protectedPct.toFixed(1)}%)`,
+          font: { size: 13 }
+        }
+      }
+    }
+  };
+}
+
+function buildRiskChartConfig(){
+  const c = HIKING_STATS.contaminated;
+
+  return {
+    type: 'bar',
+    data: {
+      labels: ['In hiking areas','In protected areas'],
+      datasets: [{
+        label: '% of contaminated sites',
+        data: [c.pctHiking, c.pctProtected],
+        backgroundColor: ['#f97316','#ef4444']
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      scales: {
+        y: {
+          beginAtZero: true,
+          max: 100,
+          ticks: {
+            stepSize: 20,
+            callback: v => v + '%'
+          }
+        }
+      },
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          callbacks: {
+            label: ctx => `${ctx.parsed.toFixed(1)}%`
+          }
+        },
+        title: {
+          display: true,
+          text: 'Contaminated sites in hiking & protected areas',
+          font: { size: 13 }
+        }
+      }
+    }
+  };
+}
+
+function buildAttachmentChartConfig(){
+  const fav = HIKING_STATS.favourite;
+  const sym = HIKING_STATS.symbolic;
+
+  // Convert percentages to approximate counts inside hiking
+  const favInHiking   = fav.total * fav.pctHiking / 100;
+  const symInHiking   = sym.total * sym.pctHiking / 100;
+  const totalInHiking = favInHiking + symInHiking;
+
+  return {
+    type: 'pie',
+    data: {
+      labels: ['Favourite places in hiking','Symbolic places in hiking'],
+      datasets: [{
+        data: [favInHiking, symInHiking],
+        backgroundColor: ['#6366f1','#f97373']
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: { position: 'right' },
+        tooltip: {
+          callbacks: {
+            label: ctx => {
+              const value = ctx.parsed;
+              const pct   = (value / totalInHiking) * 100;
+              return `${ctx.label}: ${value.toFixed(0)} points (${pct.toFixed(1)}%)`;
+            }
+          }
+        },
+        title: {
+          display: true,
+          text: 'Place attachment points inside hiking area',
+          font: { size: 13 }
+        }
+      }
+    }
+  };
+}
+
+// 4) Tab switching logic -----------------------------------
+
+function setActiveChartTab(tabId){
+  chartTabs.forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.tab === tabId);
+  });
+
+  if (!hikingChart) {
+    console.warn('[Hiking] setActiveChartTab called but chart is null');
+    return;
+  }
+
+  let cfg;
+  if (tabId === 'protected') {
+    cfg = buildProtectedChartConfig();
+  } else if (tabId === 'risk') {
+    cfg = buildRiskChartConfig();
+  } else {
+    cfg = buildAttachmentChartConfig();
+  }
+
+  hikingChart.config.type = cfg.type;
+  hikingChart.data        = cfg.data;
+  hikingChart.options     = cfg.options;
+  hikingChart.update();
+}
+
+chartTabs.forEach(btn => {
+  btn.addEventListener('click', () => {
+    setActiveChartTab(btn.dataset.tab);
+  });
+});
+
+// 5) Show / hide chart with Hiking layer -------------------
+
+function showHikingStats(){
+  console.log('[Hiking] showHikingStats()');
+
+  if (!hikingStatsCard) {
+    console.error('[Hiking] #hikingStatsCard not found in DOM');
+    return;
+  }
+
+  // Make the card visible and position it next to the sidebar
+  hikingStatsCard.style.display = 'block';
+  positionHikingStatsCard();
+
+  const canvas = document.getElementById('hikingChart');
+  if (!canvas) {
+    console.error('[Hiking] Canvas #hikingChart not found in DOM.');
+    return;
+  }
+
+  const rect = canvas.getBoundingClientRect();
+  console.log('[Hiking] canvas client size:', rect.width, 'x', rect.height);
+
+  if (typeof Chart === 'undefined') {
+    console.error('[Hiking] Chart.js not loaded – cannot draw chart.');
+    return;
+  }
+
+  if (!hikingChart) {
+    console.log('[Hiking] creating Chart instance');
+    const ctx = canvas.getContext('2d');
+    hikingChart = new Chart(ctx, buildProtectedChartConfig());
+    window.hikingChart = hikingChart;
+    console.log('[Hiking] chart created. canvas drawing size:', canvas.width, 'x', canvas.height);
+    setActiveChartTab('protected');
+  } else {
+    console.log('[Hiking] Chart already exists – just showing card');
+  }
+}
+
+function hideHikingStats(){
+  console.log('[Hiking] hideHikingStats()');
+
+  if (hikingStatsCard) {
+    // Hide the floating panel
+    hikingStatsCard.style.display = 'none';
+  }
+
+  if (hikingChart){
+    // Destroy the Chart.js instance so we can recreate it cleanly next time
+    console.log('[Hiking] destroying chart instance');
+    hikingChart.destroy();
+    hikingChart = null;
+  }
+}
+
+// 6) DEBUG HELPERS: for manual testing via console ----------
+
+// a) Simple dummy chart to confirm Chart.js can draw anything
+function debugShowDummyChart(){
+  console.log('[Debug] debugShowDummyChart()');
+
+  if (!hikingStatsCard) {
+    console.error('[Debug] #hikingStatsCard not found');
+    return;
+  }
+  hikingStatsCard.style.display = 'block';
+
+  const canvas = document.getElementById('hikingChart');
+  if (!canvas){
+    console.error('[Debug] Canvas #hikingChart not found');
+    return;
+  }
+
+  const ctx = canvas.getContext('2d');
+
+  if (typeof Chart === 'undefined') {
+    console.error('[Debug] Chart.js not loaded');
+    return;
+  }
+
+  if (hikingChart){
+    console.log('[Debug] destroying previous chart instance');
+    hikingChart.destroy();
+  }
+
+  hikingChart = new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels: ['A','B','C'],
+      datasets: [{
+        label: 'Dummy data',
+        data: [5, 3, 8]
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false
+    }
+  });
+
+  window.hikingChart = hikingChart;
+  console.log('[Debug] dummy chart drawn. canvas size:', canvas.width, 'x', canvas.height);
+}
+
+window.addEventListener('resize', () => {
+  if (hikingStatsCard && hikingStatsCard.style.display === 'block') {
+    positionHikingStatsCard();
+  }
+});
+
+
+// b) Paint the canvas red to see if it is actually visible
+function debugPaintCanvasRed(){
+  console.log('[Debug] debugPaintCanvasRed()');
+  const canvas = document.getElementById('hikingChart');
+  if (!canvas){
+    console.error('[Debug] Canvas #hikingChart not found');
+    return;
+  }
+  const ctx = canvas.getContext('2d');
+  const w   = canvas.width  || 300;
+  const h   = canvas.height || 150;
+  ctx.fillStyle = 'red';
+  ctx.fillRect(0, 0, w, h);
+  console.log('[Debug] filled canvas with red', w, 'x', h);
+}
+
+</script>
+</body>
+</html>
