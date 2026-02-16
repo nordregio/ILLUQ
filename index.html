@@ -161,6 +161,34 @@
   }
   .legend-note { margin-top:6px; color:var(--muted); }
 
+  /* --- NEW: indented sub-legends under selectable layers --- */
+  .sublegend{
+    margin:2px 0 10px 52px;       /* more indented than .legend-item */
+    padding:6px 8px 6px 10px;
+    border-left:2px solid var(--border);
+    border-radius:8px;
+    background:#fafafa;
+    font-size:11px;
+  }
+  .sublegend-title{
+    margin:0 0 6px;
+    color:#0f172a;
+  }
+  .sublegend-item{
+    display:flex;
+    align-items:center;
+    gap:8px;
+    padding:2px 0;
+    color:#0f172a;
+  }
+  .sublegend-swatch{
+    width:14px;
+    height:14px;
+    border-radius:3px;
+    border:1px solid rgba(0,0,0,.15);
+    flex:0 0 14px;
+  }
+
   /* “i” info icon with hover tooltip */
   .info-icon{
     position:relative;
@@ -558,6 +586,8 @@
           <span class="legend-swatch"></span>
           <span>Long routes</span>
         </label>
+        <!-- NEW: sub-legend (shown only when layer is on) -->
+        <div class="sublegend" id="sublegendRoutesLong" style="display:none;"></div>
 
         <label class="legend-item" data-style-key="routesShort">
           <input type="checkbox" id="lyrRoutesShort">
@@ -585,6 +615,8 @@
           <span class="legend-swatch"></span>
           <span>Life-supporting infrastructure</span>
         </label>
+        <!-- NEW: sub-legend (shown only when layer is on) -->
+        <div class="sublegend" id="sublegendInfraLife" style="display:none;"></div>
 
         <label class="legend-item" data-style-key="infraCritical">
           <input type="checkbox" id="lyrInfraCritical">
@@ -828,10 +860,18 @@ const PATHS = {
   fishing: 'SVA/5_Fishing/fishing_data_join.zip',
   hunting: 'SVA/6_Hunting/Hunting_data_join.zip',
 
-  routesLong:  'SVA/7_Routes/routes_long_data_join.zip',
+  // UPDATED: use concentration grids for long routes
+  routesLong:  [
+    'SVA/7_Routes/long_routes_concentration_grid.zip',
+    'SVA/7_Routes/long_routes_concentration_grid.ZIP'
+  ],
   routesShort: 'SVA/7_Routes/routes_data_join.zip',
 
-  infraLife:        'SVA/8_Infra_life_supporting/8_Infra_life_supp.zip',
+  // UPDATED: use concentration grid for life-supporting infrastructure
+  infraLife:        [
+    'SVA/8_Infra_life_supporting/infr_life_supp_concentration_grid.zip',
+    'SVA/8_Infra_life_supporting/infr_life_supp_concentration_grid.ZIP'
+  ],
   infraCritical:    'SVA/9_Infra_critical/9_Infrastructure_critical.zip',
   infraContaminated:'SVA/10_Contaminated_sites/contaminated_sites_data_join.ZIP',
   infraDangerous:   'SVA/11_Dangerous_infrastructure/dangerous_infra_data_join.zip',
@@ -853,11 +893,9 @@ const PATHS = {
 };
 
 // (S4.3.b) Styles (colors + transparency)
-// Polygons default: fillOpacity 0.35; Lines: weight 3, opacity 0.9
-// Polygons default: fillOpacity 0.4; Lines: weight 3, opacity 0.9
 const STYLE = {
   // Recreation
-  hiking: {               // light green
+  hiking: {
     color:'#15803d',
     fillColor:'#bbf7d0',
     weight:2,
@@ -865,7 +903,7 @@ const STYLE = {
     fillOpacity:0.4,
     opacity:1
   },
-  skiing: {               // white with light grey hatch
+  skiing: {
     color:'#9ca3af',
     fillColor:'#ffffff',
     weight:2,
@@ -873,7 +911,7 @@ const STYLE = {
     fillOpacity:0.4,
     opacity:1
   },
-  snow: {                 // light grey
+  snow: {
     color:'#6b7280',
     fillColor:'#e5e7eb',
     weight:2,
@@ -881,21 +919,21 @@ const STYLE = {
     fillOpacity:0.4,
     opacity:1
   },
-  sailing: {              // light blue
+  sailing: {
     color:'#2563eb',
     fillColor:'#bfdbfe',
     weight:1.5,
     fillOpacity:0.4,
     opacity:1
   },
-  fishing: {              // darker pale blue
+  fishing: {
     color:'#1d4ed8',
     fillColor:'#93c5fd',
     weight:1.5,
     fillOpacity:0.4,
     opacity:1
   },
-  hunting: {              // light pale brown
+  hunting: {
     color:'#b45309',
     fillColor:'#f5e7d0',
     weight:1.5,
@@ -903,51 +941,41 @@ const STYLE = {
     opacity:1
   },
 
-  // Routes
-  routesLong:  {          // solid black
-    color:'#111827',
-    weight:3,
-    opacity:0.9
-  },
-  routesShort: {          // dashed pale red
-    color:'#f97373',
-    weight:3,
-    dashArray:'6 4',
-    opacity:0.9
-  },
+  // Routes (swatch only; actual long routes layer is now choropleth)
+  routesLong:  { color:'#111827', weight:3, opacity:0.9 },
+  routesShort: { color:'#f97373', weight:3, dashArray:'6 4', opacity:0.9 },
 
-  // Infrastructure
-  lifeInfraPlaceholder: null, // just to visually separate groups, ignore
-
-  infraLife: {            // dark orange
+  // Infrastructure (swatch only; infraLife is now choropleth)
+  lifeInfraPlaceholder: null,
+  infraLife: {
     color:'#c2410c',
     fillColor:'#fed7aa',
     weight:1.5,
     fillOpacity:0.4,
     opacity:1
   },
-  infraCritical: {        // dark red
+  infraCritical: {
     color:'#b91c1c',
     fillColor:'#fecaca',
     weight:1.5,
     fillOpacity:0.4,
     opacity:1
   },
-  infraContaminated: {    // black
+  infraContaminated: {
     color:'#111827',
     fillColor:'#9ca3af',
     weight:1.5,
     fillOpacity:0.4,
     opacity:1
   },
-  infraDangerous: {       // pale pink
+  infraDangerous: {
     color:'#e11d48',
     fillColor:'#ffe4e6',
     weight:1.5,
     fillOpacity:0.4,
     opacity:1
   },
-  infraDamaged: {         // dark yellow
+  infraDamaged: {
     color:'#a16207',
     fillColor:'#facc15',
     weight:1.5,
@@ -956,21 +984,21 @@ const STYLE = {
   },
 
   // Place attachment
-  favPlaces: {            // pale purple
+  favPlaces: {
     color:'#7c3aed',
     fillColor:'#e9d5ff',
     weight:1.5,
     fillOpacity:0.4,
     opacity:1
   },
-  symbolicMeaning: {      // pale pink
+  symbolicMeaning: {
     color:'#be123c',
     fillColor:'#ffe4e6',
     weight:1.5,
     fillOpacity:0.4,
     opacity:1
   },
-  protectedAreas: {       // dark green
+  protectedAreas: {
     color:'#14532d',
     fillColor:'#bbf7d0',
     weight:1.5,
@@ -995,21 +1023,21 @@ const STYLE = {
   },
 
   // Climate change perceptions
-  ccSummer: {             // dark gold
+  ccSummer: {
     color:'#b45309',
     fillColor:'#facc15',
     weight:1.5,
     fillOpacity:0.4,
     opacity:1
   },
-  ccWinter: {             // dark blue
+  ccWinter: {
     color:'#1e3a8a',
     fillColor:'#bfdbfe',
     weight:1.5,
     fillOpacity:0.4,
     opacity:1
   },
-  ccNegative: {           // negative impact (red)
+  ccNegative: {
     color:'#dc2626',
     fillColor:'#fee2e2',
     weight:1.5,
@@ -1017,7 +1045,6 @@ const STYLE = {
     opacity:1
   },
 
-  // kept for reference
   limits: { color:'#111827', weight:2, fill:false, dashArray:'6 4', opacity:1 }
 };
 
@@ -1048,6 +1075,102 @@ const LANDCOVER_CLASSES = {
   23: { label: "Other (incl. shadow)",                                                  color: "#2E2E2E" }
 };
 
+/* -------------------------------------------------------------------
+   NEW: Classified choropleths + sub-legends for:
+   - infraLife  (occ_concentration) # occ_concen
+   - routesLong (route_len_pct)
+   ------------------------------------------------------------------- */
+
+const INFRA_OCC_FIELD = 'occ_concen';
+const ROUTE_LEN_FIELD = 'route_len1';
+
+// Parse numbers that may come as strings like "1.55"
+function toNum(x){
+  if (x === null || x === undefined) return NaN;
+  if (typeof x === 'number') return x;
+  const s = String(x).trim().replace(',', '.');
+  const n = Number(s);
+  return Number.isFinite(n) ? n : NaN;
+}
+
+// Infrastructure concentration bins (as requested)
+const INFRA_OCC_CLASSES = [
+  { label: 'No occurences', color: '#fff7bc', match: v => v === 0 },
+  { label: '<1.5',          color: '#fed7aa', match: v => v > 0 && v < 1.5 },
+  { label: '1.5 - 3.5',     color: '#f97316', match: v => v >= 1.5 && v < 3.5 },
+  { label: '3.5 - 5.5',     color: '#fca5a5', match: v => v >= 3.5 && v < 5.5 },
+  { label: '5.5 - 10.5',    color: '#b91c1c', match: v => v >= 5.5 }
+];
+
+// Long routes bins (requested; plus same “no occurrences” handling)
+const ROUTE_LEN_CLASSES = [
+  { label: 'No occurences', color: '#fff7bc', match: v => v === 0 },
+  { label: '1',             color: '#dbeafe', match: v => v > 0 && v <= 1 },
+  { label: '1-1.5',         color: '#bfdbfe', match: v => v > 1 && v < 1.5 },
+  { label: '1.5-2',         color: '#60a5fa', match: v => v >= 1.5 && v < 2 },
+  { label: '2-2.5',         color: '#2563eb', match: v => v >= 2 && v < 2.5 },
+  { label: '2.5-3',         color: '#1e3a8a', match: v => v >= 2.5 }
+];
+
+function classToColor(v, classes){
+  if (!Number.isFinite(v)) return '#d1d5db'; // fallback for No data
+  for (const c of classes){
+    if (c.match(v)) return c.color;
+  }
+  return classes[classes.length - 1]?.color || '#d1d5db';
+}
+
+function makeChoroStyleFn(fieldName, classes){
+  return function(feature){
+    const v = toNum(feature?.properties?.[fieldName]);
+    return {
+      color: '#6b7280',
+      weight: 0.6,
+      opacity: 1,
+      fillColor: classToColor(v, classes),
+      fillOpacity: 1
+    };
+  };
+}
+
+const infraLifeChoroStyle  = makeChoroStyleFn(INFRA_OCC_FIELD, INFRA_OCC_CLASSES);
+const routesLongChoroStyle = makeChoroStyleFn(ROUTE_LEN_FIELD, ROUTE_LEN_CLASSES);
+
+// Build sub-legend HTML
+function renderSubLegend(containerId, title, classes){
+  const el = document.getElementById(containerId);
+  if (!el) return;
+
+  const items = classes.map(c => `
+    <div class="sublegend-item">
+      <span class="sublegend-swatch" style="background:${c.color};"></span>
+      <span>${c.label}</span>
+    </div>
+  `).join('');
+
+  el.innerHTML = `
+    <div class="sublegend-title"><strong>${title}</strong></div>
+    ${items}
+  `;
+}
+
+// Show/hide helper
+function setSubLegendVisible(containerId, visible){
+  const el = document.getElementById(containerId);
+  if (!el) return;
+  el.style.display = visible ? 'block' : 'none';
+}
+
+// Make sublegend swatches follow global opacity slider
+function paintSubLegendSwatches(){
+  document.querySelectorAll('.sublegend-swatch').forEach(sw => {
+    sw.style.opacity = String(currentOpacity);
+  });
+}
+
+// Render sublegends once (hidden until toggled)
+renderSubLegend('sublegendInfraLife',  'Infrastructure points concentration (%)', INFRA_OCC_CLASSES);
+renderSubLegend('sublegendRoutesLong', 'Route length concentration (%)', ROUTE_LEN_CLASSES);
 
 /* Paint swatches in the sidebar using STYLE colors */
 let currentOpacity = 0.5; // 0% transparency (fully opaque) by default
@@ -1067,6 +1190,9 @@ function paintSwatches(){
       sw.style.border = '1px solid rgba(0,0,0,.15)';
     }
   });
+
+  // NEW: also update sublegend swatches opacity
+  paintSubLegendSwatches();
 }
 paintSwatches();
 
@@ -1197,10 +1323,6 @@ function wireLandCoverPanelControls(){
   });
 }
 
-
-
-
-// (S4.3.c) Generic loader: shapefile ZIP -> Leaflet layer
 // ---------- Robust vector loading (GeoJSON or Shapefile ZIP) ----------
 async function loadVector(url){
   const lower = url.toLowerCase();
@@ -1250,14 +1372,22 @@ async function firstWorking(urls){
 
 const loaded = {}; // id -> L.GeoJSON
 
+// UPDATED: ensureLayer supports style as object OR function (needed for choropleths)
 async function ensureLayer(id, urlOrList, style){
   if (loaded[id]) return loaded[id];
   try{
     const { fc, url } = await firstWorking(urlOrList);
+
+    const styleFn = (typeof style === 'function') ? style : (() => style);
+
     const layer = L.geoJSON(fc, {
-      style,
-      pointToLayer: (f, latlng) => L.circleMarker(latlng, { radius:5, ...style })
+      style: styleFn,
+      pointToLayer: (f, latlng) => {
+        const st = styleFn(f) || {};
+        return L.circleMarker(latlng, { radius:5, ...st });
+      }
     });
+
     applyOpacityToLayer(layer, currentOpacity);
     loaded[id] = layer;
     console.log(`✅ Loaded '${id}' (${fc.features.length} features) from ${url}`);
@@ -1266,6 +1396,46 @@ async function ensureLayer(id, urlOrList, style){
     console.error(`❌ Could not load '${id}' from`, urlOrList, err);
     alert(`Could not load "${id}". Open DevTools → Console for details.`);
   }
+}
+
+// ---------- Auto-zoom to layer bounds (smart) ----------
+
+// Pick a maxZoom based on how large the layer extent is (diagonal distance)
+function maxZoomFromBounds(bounds){
+  const sw = bounds.getSouthWest();
+  const ne = bounds.getNorthEast();
+  const diagKm = map.distance(sw, ne) / 1000;
+
+  if (diagKm < 2)   return 16;
+  if (diagKm < 8)   return 15;
+  if (diagKm < 20)  return 14;
+  if (diagKm < 50)  return 13;
+  if (diagKm < 150) return 12;
+  if (diagKm < 400) return 11;
+  return 10;
+}
+
+// Fit map to a layer, with padding so it won't hide under toolbox/sidebar
+function zoomToLayer(layer){
+  if (!layer || typeof layer.getBounds !== 'function') return;
+  const b = layer.getBounds();
+  if (!b || typeof b.isValid !== 'function' || !b.isValid()) return;
+
+  const sidebar = document.querySelector('.sidebar');
+  const sidebarW = sidebar ? sidebar.getBoundingClientRect().width : 420;
+
+  // padding (pixels): [x,y]
+  const leftPad   = 110;            // left toolbox + breathing room
+  const topPad    = 40;
+  const rightPad  = sidebarW + 60;  // sidebar width + breathing room
+  const bottomPad = 40;
+
+  map.fitBounds(b, {
+    paddingTopLeft: [leftPad, topPad],
+    paddingBottomRight: [rightPad, bottomPad],
+    maxZoom: maxZoomFromBounds(b),
+    animate: true
+  });
 }
 
 /* ---------------------------------------------
@@ -1279,7 +1449,6 @@ document.querySelectorAll('input[name="basemap"]').forEach(r=>{
     basemaps[v].addTo(map);
   });
 });
-
 
 // Global opacity slider
 const opSlider = document.getElementById('opacity');
@@ -1303,8 +1472,6 @@ opSlider.addEventListener('input', () => {
   paintSwatches();
 });
 
-// (S4.4.c) Participatory toggles (on-demand loading)
-// Child toggle map (unchanged ids)
 // Child toggle map
 const toggleMap = [
   ['lyrHiking',       'hiking',       PATHS.hiking,       STYLE.hiking],
@@ -1314,10 +1481,12 @@ const toggleMap = [
   ['lyrFishing',      'fishing',      PATHS.fishing,      STYLE.fishing],
   ['lyrHunting',      'hunting',      PATHS.hunting,      STYLE.hunting],
 
-  ['lyrRoutesLong',   'routesLong',   PATHS.routesLong,   STYLE.routesLong],
+  // UPDATED: choropleth style for long routes concentration grid
+  ['lyrRoutesLong',   'routesLong',   PATHS.routesLong,   routesLongChoroStyle],
   ['lyrRoutesShort',  'routesShort',  PATHS.routesShort,  STYLE.routesShort],
 
-  ['lyrInfraLife',        'infraLife',        PATHS.infraLife,        STYLE.infraLife],
+  // UPDATED: choropleth style for infra life-support concentration grid
+  ['lyrInfraLife',        'infraLife',        PATHS.infraLife,        infraLifeChoroStyle],
   ['lyrInfraCritical',    'infraCritical',    PATHS.infraCritical,    STYLE.infraCritical],
   ['lyrInfraContaminated','infraContaminated',PATHS.infraContaminated,STYLE.infraContaminated],
   ['lyrInfraDangerous',   'infraDangerous',   PATHS.infraDangerous,   STYLE.infraDangerous],
@@ -1335,7 +1504,6 @@ const toggleMap = [
   ['lyrCCNegative',       'ccNegative',       PATHS.ccNegative,       STYLE.ccNegative]
 ];
 
-
 // Wire children
 toggleMap.forEach(([chkId, id, url, style]) => {
   const checkbox = document.getElementById(chkId);
@@ -1350,11 +1518,25 @@ toggleMap.forEach(([chkId, id, url, style]) => {
     }
 
     if (e.target.checked) {
-      console.log('[Layer toggle]', id, '→ adding to map');
-      layer.addTo(map);
-    } else {
-      console.log('[Layer toggle]', id, '→ removing from map');
-      map.removeLayer(layer);
+  console.log('[Layer toggle]', id, '→ adding to map');
+  layer.addTo(map);
+
+  // Auto-zoom when a user turns a layer on
+  // (If you want it to also zoom when group toggles are used, remove the "e.isTrusted" check)
+  if (e.isTrusted) {
+    zoomToLayer(layer);
+  }
+} else {
+  console.log('[Layer toggle]', id, '→ removing from map');
+  map.removeLayer(layer);
+}
+
+    // NEW: show/hide classified sub-legends when these layers toggle
+    if (id === 'infraLife') {
+      setSubLegendVisible('sublegendInfraLife', e.target.checked);
+    }
+    if (id === 'routesLong') {
+      setSubLegendVisible('sublegendRoutesLong', e.target.checked);
     }
 
     // 👇 Extra: show / hide chart when Hiking layer is toggled
@@ -1371,7 +1553,6 @@ toggleMap.forEach(([chkId, id, url, style]) => {
   });
 });
 
-
 // Group helpers
 const groups = {
   grpRecreation: ['lyrHiking','lyrSkiing','lyrSnow','lyrSailing','lyrFishing','lyrHunting'],
@@ -1381,7 +1562,6 @@ const groups = {
   grpScience:    ['lyrScienceObs','lyrScienceActivities'],
   grpClimate:    ['lyrCCSummer','lyrCCWinter','lyrCCNegative']
 };
-
 
 function toggleGroup(parentId){
   const parent = document.getElementById(parentId);
@@ -1415,6 +1595,7 @@ toggleGroup('grpPlace');
 toggleGroup('grpScience');
 toggleGroup('grpClimate');
 syncParents();
+
 /* ---------------------------------------------
    SECTION 4.5: Left toolbox → info panel
    --------------------------------------------- */
@@ -1517,8 +1698,8 @@ if (window.Chart) {
 }
 
 const hikingStatsCard = document.getElementById('hikingStatsCard');
-// Place the hiking stats panel next to the sidebar
-// Place the hiking stats panel next to the LEFT toolbox (Permafrost / Land cover / etc.)
+
+// Place the hiking stats panel next to the LEFT toolbox
 function positionHikingStatsCard(){
   if (!hikingStatsCard) return;
 
@@ -1540,7 +1721,7 @@ function positionHikingStatsCard(){
     console.log('[Hiking] positioned stats card next to toolbox at left =',
                 hikingStatsCard.style.left, 'top =', hikingStatsCard.style.top);
   } else {
-    // Fallback: if toolbox not found, put it in a safe default position
+    // Fallback
     console.warn('[Hiking] #toolbox not found, using default position');
     hikingStatsCard.style.top       = '16px';
     hikingStatsCard.style.left      = '16px';
@@ -1563,7 +1744,6 @@ function buildProtectedChartConfig(){
       labels: ['Protected hiking area', 'Other hiking area'],
       datasets: [{
         data: [protectedPct, notProtectedPct],
-        // Just some contrasting colours
         backgroundColor: ['#16a34a','#d1fae5']
       }]
     },
@@ -1761,78 +1941,11 @@ function hideHikingStats(){
   }
 }
 
-// 6) DEBUG HELPERS: for manual testing via console ----------
-
-// a) Simple dummy chart to confirm Chart.js can draw anything
-function debugShowDummyChart(){
-  console.log('[Debug] debugShowDummyChart()');
-
-  if (!hikingStatsCard) {
-    console.error('[Debug] #hikingStatsCard not found');
-    return;
-  }
-  hikingStatsCard.style.display = 'block';
-
-  const canvas = document.getElementById('hikingChart');
-  if (!canvas){
-    console.error('[Debug] Canvas #hikingChart not found');
-    return;
-  }
-
-  const ctx = canvas.getContext('2d');
-
-  if (typeof Chart === 'undefined') {
-    console.error('[Debug] Chart.js not loaded');
-    return;
-  }
-
-  if (hikingChart){
-    console.log('[Debug] destroying previous chart instance');
-    hikingChart.destroy();
-  }
-
-  hikingChart = new Chart(ctx, {
-    type: 'bar',
-    data: {
-      labels: ['A','B','C'],
-      datasets: [{
-        label: 'Dummy data',
-        data: [5, 3, 8]
-      }]
-    },
-    options: {
-      responsive: true,
-      maintainAspectRatio: false
-    }
-  });
-
-  window.hikingChart = hikingChart;
-  console.log('[Debug] dummy chart drawn. canvas size:', canvas.width, 'x', canvas.height);
-}
-
 window.addEventListener('resize', () => {
   if (hikingStatsCard && hikingStatsCard.style.display === 'block') {
     positionHikingStatsCard();
   }
 });
-
-
-// b) Paint the canvas red to see if it is actually visible
-function debugPaintCanvasRed(){
-  console.log('[Debug] debugPaintCanvasRed()');
-  const canvas = document.getElementById('hikingChart');
-  if (!canvas){
-    console.error('[Debug] Canvas #hikingChart not found');
-    return;
-  }
-  const ctx = canvas.getContext('2d');
-  const w   = canvas.width  || 300;
-  const h   = canvas.height || 150;
-  ctx.fillStyle = 'red';
-  ctx.fillRect(0, 0, w, h);
-  console.log('[Debug] filled canvas with red', w, 'x', h);
-}
-
 </script>
 </body>
 </html>
