@@ -1083,26 +1083,9 @@ const LANDCOVER_CLASSES = {
 
 const INFRA_OCC_FIELD = 'occ_concen';
 const ROUTE_LEN_FIELD = 'route_len1';
+const ROUTE_SHORT_FIELD = 'occ_concentration';
 
-// Parse numbers that may come as strings like "1.55"
-function toNum(x){
-  if (x === null || x === undefined) return NaN;
-  if (typeof x === 'number') return x;
-  const s = String(x).trim().replace(',', '.');
-  const n = Number(s);
-  return Number.isFinite(n) ? n : NaN;
-}
-
-// Infrastructure concentration bins (as requested)
-const INFRA_OCC_CLASSES = [
-  { label: 'No occurences', color: '#fff7bc', match: v => v === 0 },
-  { label: '<1.5',          color: '#fed7aa', match: v => v > 0 && v < 1.5 },
-  { label: '1.5 - 3.5',     color: '#f97316', match: v => v >= 1.5 && v < 3.5 },
-  { label: '3.5 - 5.5',     color: '#fca5a5', match: v => v >= 3.5 && v < 5.5 },
-  { label: '5.5 - 10.5',    color: '#b91c1c', match: v => v >= 5.5 }
-];
-
-// Long routes bins (requested; plus same “no occurrences” handling)
+// Long routes bins
 const ROUTE_LEN_CLASSES = [
   { label: 'No occurences', color: '#fff7bc', match: v => v === 0 },
   { label: '1',             color: '#dbeafe', match: v => v > 0 && v <= 1 },
@@ -1112,65 +1095,24 @@ const ROUTE_LEN_CLASSES = [
   { label: '2.5-3',         color: '#1e3a8a', match: v => v >= 2.5 }
 ];
 
-function classToColor(v, classes){
-  if (!Number.isFinite(v)) return '#d1d5db'; // fallback for No data
-  for (const c of classes){
-    if (c.match(v)) return c.color;
-  }
-  return classes[classes.length - 1]?.color || '#d1d5db';
-}
+// Short routes bins
+const ROUTE_SHORT_CLASSES = [
+  { label: 'No occurences', color: '#fff7bc', match: v => v === 0 },
+  { label: '1',             color: '#dbeafe', match: v => v > 0 && v <= 1 },
+  { label: '1-1.5',         color: '#bfdbfe', match: v => v > 1 && v < 1.5 },
+  { label: '1.5-2',         color: '#60a5fa', match: v => v >= 1.5 && v < 2 },
+  { label: '2-2.5',         color: '#2563eb', match: v => v >= 2 && v < 2.5 },
+  { label: '2.5-3',         color: '#1e3a8a', match: v => v >= 2.5 && v <= 3 },
+  { label: '>3',            color: '#172554', match: v => v > 3 }
+];
 
-function makeChoroStyleFn(fieldName, classes){
-  return function(feature){
-    const v = toNum(feature?.properties?.[fieldName]);
-    return {
-      color: '#6b7280',
-      weight: 0.6,
-      opacity: 1,
-      fillColor: classToColor(v, classes),
-      fillOpacity: 1
-    };
-  };
-}
+const infraLifeChoroStyle   = makeChoroStyleFn(INFRA_OCC_FIELD, INFRA_OCC_CLASSES);
+const routesLongChoroStyle  = makeChoroStyleFn(ROUTE_LEN_FIELD, ROUTE_LEN_CLASSES);
+const routesShortChoroStyle = makeChoroStyleFn(ROUTE_SHORT_FIELD, ROUTE_SHORT_CLASSES);
 
-const infraLifeChoroStyle  = makeChoroStyleFn(INFRA_OCC_FIELD, INFRA_OCC_CLASSES);
-const routesLongChoroStyle = makeChoroStyleFn(ROUTE_LEN_FIELD, ROUTE_LEN_CLASSES);
-
-// Build sub-legend HTML
-function renderSubLegend(containerId, title, classes){
-  const el = document.getElementById(containerId);
-  if (!el) return;
-
-  const items = classes.map(c => `
-    <div class="sublegend-item">
-      <span class="sublegend-swatch" style="background:${c.color};"></span>
-      <span>${c.label}</span>
-    </div>
-  `).join('');
-
-  el.innerHTML = `
-    <div class="sublegend-title"><strong>${title}</strong></div>
-    ${items}
-  `;
-}
-
-// Show/hide helper
-function setSubLegendVisible(containerId, visible){
-  const el = document.getElementById(containerId);
-  if (!el) return;
-  el.style.display = visible ? 'block' : 'none';
-}
-
-// Make sublegend swatches follow global opacity slider
-function paintSubLegendSwatches(){
-  document.querySelectorAll('.sublegend-swatch').forEach(sw => {
-    sw.style.opacity = String(currentOpacity);
-  });
-}
-
-// Render sublegends once (hidden until toggled)
 renderSubLegend('sublegendInfraLife',  'Infrastructure points concentration (%)', INFRA_OCC_CLASSES);
 renderSubLegend('sublegendRoutesLong', 'Route length concentration (%)', ROUTE_LEN_CLASSES);
+renderSubLegend('sublegendRoutesShort', 'Short route concentration (%)', ROUTE_SHORT_CLASSES);
 
 /* Paint swatches in the sidebar using STYLE colors */
 let currentOpacity = 0.5; // 0% transparency (fully opaque) by default
@@ -1483,7 +1425,7 @@ const toggleMap = [
 
   // UPDATED: choropleth style for long routes concentration grid
   ['lyrRoutesLong',   'routesLong',   PATHS.routesLong,   routesLongChoroStyle],
-  ['lyrRoutesShort',  'routesShort',  PATHS.routesShort,  STYLE.routesShort],
+  ['lyrRoutesShort',  'routesShort',  PATHS.routesShort,  routesShortChoroStyle],
 
   // UPDATED: choropleth style for infra life-support concentration grid
   ['lyrInfraLife',        'infraLife',        PATHS.infraLife,        infraLifeChoroStyle],
@@ -1537,6 +1479,9 @@ toggleMap.forEach(([chkId, id, url, style]) => {
     }
     if (id === 'routesLong') {
       setSubLegendVisible('sublegendRoutesLong', e.target.checked);
+    }
+    if (id === 'routesShort') {
+      setSubLegendVisible('sublegendRoutesShort', e.target.checked);
     }
 
     // 👇 Extra: show / hide chart when Hiking layer is toggled
@@ -1949,3 +1894,4 @@ window.addEventListener('resize', () => {
 </script>
 </body>
 </html>
+
