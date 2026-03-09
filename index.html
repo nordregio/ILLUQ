@@ -603,44 +603,45 @@
           <span>Infrastructure</span>
           <span class="info-icon">i
             <span class="info-tooltip">
-              text – describe different infrastructure layers:
-              life-supporting services, critical infrastructure, contaminated or
-              dangerous sites, and damaged infrastructure.
+              text – describe here the infrastructure-related layers and how they were digitised for the project.
             </span>
           </span>
         </label>
-
+      
         <label class="legend-item" data-style-key="infraLife">
           <input type="checkbox" id="lyrInfraLife">
           <span class="legend-swatch"></span>
           <span>Life-supporting infrastructure</span>
         </label>
-        <!-- NEW: sub-legend (shown only when layer is on) -->
         <div class="sublegend" id="sublegendInfraLife" style="display:none;"></div>
-
+      
         <label class="legend-item" data-style-key="infraCritical">
           <input type="checkbox" id="lyrInfraCritical">
           <span class="legend-swatch"></span>
           <span>Critical infrastructure</span>
         </label>
-
+        <div class="sublegend" id="sublegendInfraCritical" style="display:none;"></div>
+      
         <label class="legend-item" data-style-key="infraContaminated">
           <input type="checkbox" id="lyrInfraContaminated">
           <span class="legend-swatch"></span>
           <span>Contaminated sites</span>
         </label>
-
+        <div class="sublegend" id="sublegendInfraContaminated" style="display:none;"></div>
+      
         <label class="legend-item" data-style-key="infraDangerous">
           <input type="checkbox" id="lyrInfraDangerous">
           <span class="legend-swatch"></span>
           <span>Dangerous infrastructure</span>
         </label>
-
+        <div class="sublegend" id="sublegendInfraDangerous" style="display:none;"></div>
+      
         <label class="legend-item" data-style-key="infraDamaged">
           <input type="checkbox" id="lyrInfraDamaged">
           <span class="legend-swatch"></span>
           <span>Damaged infrastructure</span>
         </label>
+        <div class="sublegend" id="sublegendInfraDamaged" style="display:none;"></div>
       </div>
       <!-- Place attachment -->
       <div class="legend-group" id="grpPlaceBlock">
@@ -673,7 +674,6 @@
           <span>Protected areas</span>
         </label>
       </div>
-
       <!-- Science & education -->
       <div class="legend-group" id="grpScienceBlock">
         <label class="legend-header">
@@ -853,7 +853,10 @@ const citiesLayer = L.layerGroup([
 
 // (S4.3.a) File paths (ZIPs containing .shp+.dbf+.shx+.prj)
 // (S4.3.a) File paths (ZIPs containing .shp+.dbf+.shx+.prj)
+// (S4.3.a) File paths (ZIPs containing .shp+.dbf+.shx+.prj)
 const PATHS = {
+
+  // NOT UPDATED:
   hiking:  'SVA/0_Hiking/Hiking_data_all_join.zip',
   skiing:  'SVA/1_Skiing/skiing_data_join.zip',
   snow:    'SVA/2_Snowmobiling/snowmobiling_data_join.zip',
@@ -861,26 +864,32 @@ const PATHS = {
   fishing: 'SVA/5_Fishing/fishing_data_join.zip',
   hunting: 'SVA/6_Hunting/Hunting_data_join.zip',
 
-  // UPDATED: use concentration grids for long routes
-  routesLong:  [
+  // UPDATED: use concentration grids for routes
+  routesLong: [
     'SVA/7_Routes/long_routes_concentration_grid.zip',
-    'SVA/7_Routes/long_routes_concentration_grid.ZIP'
   ],
   routesShort: [
     'SVA/7_Routes/short_routes_concentration_grid.zip',
-    'SVA/7_Routes/short_routes_concentration_grid.ZIP'
   ],
 
-  // UPDATED: use concentration grid for life-supporting infrastructure
-  infraLife:        [
+  // UPDATED: infrastructure concentration grids
+  infraLife: [
     'SVA/8_Infra_life_supporting/infr_life_supp_concentration_grid.zip',
-    'SVA/8_Infra_life_supporting/infr_life_supp_concentration_grid.ZIP'
   ],
-  infraCritical:    'SVA/9_Infra_critical/9_Infrastructure_critical.zip',
-  infraContaminated:'SVA/10_Contaminated_sites/contaminated_sites_data_join.ZIP',
-  infraDangerous:   'SVA/11_Dangerous_infrastructure/dangerous_infra_data_join.zip',
-  infraDamaged:     'SVA/12_Damaged_infrastructure/damaged_infrastructure_data_join.zip',
+  infraCritical: [
+    'SVA/9_Infra_critical_hex_grid.zip',
+  ],
+  infraContaminated: [
+    'SVA/10_contaminated_sites_hexgrid.zip',
+  ],
+  infraDangerous: [
+    'SVA/11_dangerous_infra_grid.zip',
+  ],
+  infraDamaged: [
+    'SVA/12_damaged_infrastructure_grid.zip',
+  ],
 
+  // NOT UPDATED:
   favPlaces:        'SVA/13_Favourite_Places/favourite_places_data_join.zip',
   symbolicMeaning:  'SVA/14_Symbolic_places/symbolic_meaning_data_join.zip',
   protectedAreas:   'SVA/15_Protected_Areas/protected_areas_data_join.zip',
@@ -895,7 +904,6 @@ const PATHS = {
   // Land-cover GeoTIFF (single-band classified raster)
   landcoverRaster: 'SVA/LUC/ESACCI_LCU_2016_2024_500m.tif'
 };
-
 // (S4.3.b) Styles (colors + transparency)
 const STYLE = {
   // Recreation
@@ -1080,9 +1088,14 @@ const LANDCOVER_CLASSES = {
 };
 
 /* -------------------------------------------------------------------
-   NEW: Classified choropleths + sub-legends for:
-   - infraLife  (occ_concentration) # occ_concen
-   - routesLong (route_len_pct)
+   Classified choropleths + sub-legends for:
+   - infraLife
+   - infraCritical
+   - infraContaminated
+   - infraDangerous
+   - infraDamaged
+   - routesLong
+   - routesShort
    ------------------------------------------------------------------- */
 
 // Parse numbers that may come as strings like "1.55"
@@ -1094,53 +1107,109 @@ function toNum(x){
   return Number.isFinite(n) ? n : NaN;
 }
 
-// Infrastructure concentration bins (as requested)
-const INFRA_OCC_CLASSES = [
-  { label: 'No occurences', color: '#fff7bc', match: v => v === 0 },
-  { label: '<1.5',          color: '#fed7aa', match: v => v > 0 && v < 1.5 },
-  { label: '1.5 - 3.5',     color: '#f97316', match: v => v >= 1.5 && v < 3.5 },
-  { label: '3.5 - 5.5',     color: '#fca5a5', match: v => v >= 3.5 && v < 5.5 },
-  { label: '5.5 - 10.5',    color: '#b91c1c', match: v => v >= 5.5 }
+// Infrastructure concentration bins
+// "No occurrences" must be transparent
+const INFRA_LIFE_CLASSES = [
+  { label: 'No occurrences', color: 'transparent', match: v => v === 0, transparent: true },
+  { label: '<1.5',           color: '#fed7aa',    match: v => v > 0 && v < 1.5 },
+  { label: '1.5 - 3.5',      color: '#fb923c',    match: v => v >= 1.5 && v < 3.5 },
+  { label: '3.5 - 5.5',      color: '#f97316',    match: v => v >= 3.5 && v < 5.5 },
+  { label: '5.5 - 10.5',     color: '#dc2626',    match: v => v >= 5.5 && v < 10.5 },
+  { label: '≥10.5',          color: '#7f1d1d',    match: v => v >= 10.5 }
 ];
 
-// Long routes bins (requested; plus same “no occurrences” handling)
+const INFRA_CRITICAL_CLASSES = [
+  { label: 'No occurrences', color: 'transparent', match: v => v === 0, transparent: true },
+  { label: '<1.5',           color: '#dbeafe',    match: v => v > 0 && v < 1.5 },
+  { label: '1.5 - 3.5',      color: '#93c5fd',    match: v => v >= 1.5 && v < 3.5 },
+  { label: '3.5 - 6',        color: '#60a5fa',    match: v => v >= 3.5 && v < 6 },
+  { label: '6 - 9',          color: '#2563eb',    match: v => v >= 6 && v < 9 },
+  { label: '9 - 12.3',       color: '#1e3a8a',    match: v => v >= 9 }
+];
+
+const INFRA_CONTAM_CLASSES = [
+  { label: 'No occurrences', color: 'transparent', match: v => v === 0, transparent: true },
+  { label: '<1.5',           color: '#ede9fe',    match: v => v > 0 && v < 1.5 },
+  { label: '1.5 - 3.5',      color: '#c4b5fd',    match: v => v >= 1.5 && v < 3.5 },
+  { label: '3.5 - 5.5',      color: '#a78bfa',    match: v => v >= 3.5 && v < 5.5 },
+  { label: '5.5 - 8.5',      color: '#7c3aed',    match: v => v >= 5.5 && v < 8.5 },
+  { label: '8.5 - 11.4',     color: '#4c1d95',    match: v => v >= 8.5 }
+];
+
+const INFRA_DANGEROUS_CLASSES = [
+  { label: 'No occurrences', color: 'transparent', match: v => v === 0, transparent: true },
+  { label: '<1.5',           color: '#fee2e2',    match: v => v > 0 && v < 1.5 },
+  { label: '1.5 - 3.5',      color: '#fca5a5',    match: v => v >= 1.5 && v < 3.5 },
+  { label: '3.5 - 6.5',      color: '#f87171',    match: v => v >= 3.5 && v < 6.5 },
+  { label: '6.5 - 12',       color: '#dc2626',    match: v => v >= 6.5 && v < 12 },
+  { label: '12 - 18.8',      color: '#7f1d1d',    match: v => v >= 12 }
+];
+
+const INFRA_DAMAGED_CLASSES = [
+  { label: 'No occurrences', color: 'transparent', match: v => v === 0, transparent: true },
+  { label: '<1.5',           color: '#fce7f3',    match: v => v > 0 && v < 1.5 },
+  { label: '1.5 - 3.5',      color: '#f9a8d4',    match: v => v >= 1.5 && v < 3.5 },
+  { label: '3.5 - 6',        color: '#f472b6',    match: v => v >= 3.5 && v < 6 },
+  { label: '6 - 10.5',       color: '#db2777',    match: v => v >= 6 && v < 10.5 },
+  { label: '10.5 - 16.7',    color: '#831843',    match: v => v >= 10.5 }
+];
+
+// Routes bins
 const ROUTE_LEN_CLASSES = [
-  { label: 'No occurences', color: '#fff7bc', match: v => v === 0 },
-  { label: '1',             color: '#dbeafe', match: v => v > 0 && v <= 1 },
-  { label: '1-1.5',         color: '#bfdbfe', match: v => v > 1 && v < 1.5 },
-  { label: '1.5-2',         color: '#60a5fa', match: v => v >= 1.5 && v < 2 },
-  { label: '2-2.5',         color: '#2563eb', match: v => v >= 2 && v < 2.5 },
-  { label: '2.5-3',         color: '#1e3a8a', match: v => v >= 2.5 }
+  { label: 'No occurrences', color: 'transparent', match: v => v === 0, transparent: true },
+  { label: '1',              color: '#dbeafe',    match: v => v > 0 && v <= 1 },
+  { label: '1 - 1.5',        color: '#bfdbfe',    match: v => v > 1 && v < 1.5 },
+  { label: '1.5 - 2',        color: '#60a5fa',    match: v => v >= 1.5 && v < 2 },
+  { label: '2 - 2.5',        color: '#2563eb',    match: v => v >= 2 && v < 2.5 },
+  { label: '≥2.5',           color: '#1e3a8a',    match: v => v >= 2.5 }
 ];
 
-// Short routes bins (same logic as long routes, plus >3)
 const ROUTE_SHORT_CLASSES = [
-  { label: 'No occurences', color: '#fff7bc', match: v => v === 0 },
-  { label: '1',             color: '#dbeafe', match: v => v > 0 && v <= 1 },
-  { label: '1-1.5',         color: '#bfdbfe', match: v => v > 1 && v < 1.5 },
-  { label: '1.5-2',         color: '#60a5fa', match: v => v >= 1.5 && v < 2 },
-  { label: '2-2.5',         color: '#2563eb', match: v => v >= 2 && v < 2.5 },
-  { label: '2.5-3',         color: '#1e3a8a', match: v => v >= 2.5 && v <= 3 },
-  { label: '>3',            color: '#172554', match: v => v > 3 }
+  { label: 'No occurrences', color: 'transparent', match: v => v === 0, transparent: true },
+  { label: '1',              color: '#dbeafe',    match: v => v > 0 && v <= 1 },
+  { label: '1 - 1.5',        color: '#bfdbfe',    match: v => v > 1 && v < 1.5 },
+  { label: '1.5 - 2',        color: '#60a5fa',    match: v => v >= 1.5 && v < 2 },
+  { label: '2 - 2.5',        color: '#2563eb',    match: v => v >= 2 && v < 2.5 },
+  { label: '2.5 - 3',        color: '#1e3a8a',    match: v => v >= 2.5 && v <= 3 },
+  { label: '>3',             color: '#172554',    match: v => v > 3 }
 ];
+
+function classForValue(v, classes){
+  if (!Number.isFinite(v)) return null;
+  for (const c of classes){
+    if (c.match(v)) return c;
+  }
+  return classes[classes.length - 1] || null;
+}
 
 function classToColor(v, classes){
-  if (!Number.isFinite(v)) return '#d1d5db'; // fallback for No data
-  for (const c of classes){
-    if (c.match(v)) return c.color;
-  }
-  return classes[classes.length - 1]?.color || '#d1d5db';
+  const c = classForValue(v, classes);
+  return c ? c.color : '#d1d5db';
 }
 
 function makeChoroStyleFn(fieldName, classes){
   return function(feature){
     const v = toNum(feature?.properties?.[fieldName]);
+    const c = classForValue(v, classes);
+
+    if (!c){
+      return {
+        color: '#9ca3af',
+        weight: 0.6,
+        opacity: 1,
+        fillColor: '#d1d5db',
+        fillOpacity: 0.35
+      };
+    }
+
+    const isTransparent = !!c.transparent;
+
     return {
-      color: '#6b7280',
-      weight: 0.6,
-      opacity: 1,
-      fillColor: classToColor(v, classes),
-      fillOpacity: 1
+      color: isTransparent ? 'transparent' : '#6b7280',
+      weight: isTransparent ? 0 : 0.6,
+      opacity: isTransparent ? 0 : 1,
+      fillColor: c.color,
+      fillOpacity: isTransparent ? 0 : 1
     };
   };
 }
@@ -1152,7 +1221,8 @@ function renderSubLegend(containerId, title, classes){
 
   const items = classes.map(c => `
     <div class="sublegend-item">
-      <span class="sublegend-swatch" style="background:${c.color};"></span>
+      <span class="sublegend-swatch"
+            style="background:${c.color}; border:${c.transparent ? '1px dashed #9ca3af' : '1px solid rgba(0,0,0,.15)'};"></span>
       <span>${c.label}</span>
     </div>
   `).join('');
@@ -1173,22 +1243,35 @@ function setSubLegendVisible(containerId, visible){
 // Make sublegend swatches follow global opacity slider
 function paintSubLegendSwatches(){
   document.querySelectorAll('.sublegend-swatch').forEach(sw => {
-    sw.style.opacity = String(currentOpacity);
+    const isTransparent = sw.style.background === 'transparent';
+    sw.style.opacity = isTransparent ? '1' : String(currentOpacity);
   });
 }
 
-const INFRA_OCC_FIELD = 'occ_concen';
-const ROUTE_LEN_FIELD = 'route_len1';
-const ROUTE_SHORT_FIELD = 'occ_concen';
+const INFRA_OCC_FIELD         = 'occ_concen';
+const INFRA_CRITICAL_FIELD    = 'occ_concen';
+const INFRA_CONTAM_FIELD      = 'occ_concen';
+const INFRA_DANGEROUS_FIELD   = 'occ_concen';
+const INFRA_DAMAGED_FIELD     = 'occ_concen';
+const ROUTE_LEN_FIELD         = 'route_len1';
+const ROUTE_SHORT_FIELD       = 'occ_concen';
 
-const infraLifeChoroStyle   = makeChoroStyleFn(INFRA_OCC_FIELD, INFRA_OCC_CLASSES);
-const routesLongChoroStyle  = makeChoroStyleFn(ROUTE_LEN_FIELD, ROUTE_LEN_CLASSES);
-const routesShortChoroStyle = makeChoroStyleFn(ROUTE_SHORT_FIELD, ROUTE_SHORT_CLASSES);
+const infraLifeChoroStyle          = makeChoroStyleFn(INFRA_OCC_FIELD,       INFRA_LIFE_CLASSES);
+const infraCriticalChoroStyle      = makeChoroStyleFn(INFRA_CRITICAL_FIELD,  INFRA_CRITICAL_CLASSES);
+const infraContaminatedChoroStyle  = makeChoroStyleFn(INFRA_CONTAM_FIELD,    INFRA_CONTAM_CLASSES);
+const infraDangerousChoroStyle     = makeChoroStyleFn(INFRA_DANGEROUS_FIELD, INFRA_DANGEROUS_CLASSES);
+const infraDamagedChoroStyle       = makeChoroStyleFn(INFRA_DAMAGED_FIELD,   INFRA_DAMAGED_CLASSES);
+const routesLongChoroStyle         = makeChoroStyleFn(ROUTE_LEN_FIELD,       ROUTE_LEN_CLASSES);
+const routesShortChoroStyle        = makeChoroStyleFn(ROUTE_SHORT_FIELD,     ROUTE_SHORT_CLASSES);
 
 // Render sublegends once (hidden until toggled)
-renderSubLegend('sublegendInfraLife',  'Infrastructure points concentration (%)', INFRA_OCC_CLASSES);
-renderSubLegend('sublegendRoutesLong', 'Route length concentration (%)', ROUTE_LEN_CLASSES);
-renderSubLegend('sublegendRoutesShort','Short route concentration (%)', ROUTE_SHORT_CLASSES);
+renderSubLegend('sublegendInfraLife',          'Life-supporting infrastructure concentration (%)', INFRA_LIFE_CLASSES);
+renderSubLegend('sublegendInfraCritical',      'Critical infrastructure concentration (%)',         INFRA_CRITICAL_CLASSES);
+renderSubLegend('sublegendInfraContaminated',  'Contaminated sites concentration (%)',              INFRA_CONTAM_CLASSES);
+renderSubLegend('sublegendInfraDangerous',     'Dangerous infrastructure concentration (%)',        INFRA_DANGEROUS_CLASSES);
+renderSubLegend('sublegendInfraDamaged',       'Damaged infrastructure concentration (%)',          INFRA_DAMAGED_CLASSES);
+renderSubLegend('sublegendRoutesLong',         'Route length concentration (%)',                    ROUTE_LEN_CLASSES);
+renderSubLegend('sublegendRoutesShort',        'Short route concentration (%)',                     ROUTE_SHORT_CLASSES);
 
 /* Paint swatches in the sidebar using STYLE colors */
 let currentOpacity = 0.5; // 0% transparency (fully opaque) by default
@@ -1200,6 +1283,7 @@ function paintSwatches(){
     const sw = el.querySelector('.legend-swatch');
     const base = st.fillColor || st.color || '#999';
     sw.style.opacity = String(currentOpacity);
+
     if (!st.fillColor && st.color){
       sw.style.background = 'transparent';
       sw.style.border = `2px solid ${st.color}`;
@@ -1209,7 +1293,6 @@ function paintSwatches(){
     }
   });
 
-  // NEW: also update sublegend swatches opacity
   paintSubLegendSwatches();
 }
 paintSwatches();
@@ -1499,28 +1582,27 @@ const toggleMap = [
   ['lyrFishing',      'fishing',      PATHS.fishing,      STYLE.fishing],
   ['lyrHunting',      'hunting',      PATHS.hunting,      STYLE.hunting],
 
-  // UPDATED: choropleth style for long routes concentration grid
   ['lyrRoutesLong',   'routesLong',   PATHS.routesLong,   routesLongChoroStyle],
   ['lyrRoutesShort',  'routesShort',  PATHS.routesShort,  routesShortChoroStyle],
 
-  // UPDATED: choropleth style for infra life-support concentration grid
-  ['lyrInfraLife',        'infraLife',        PATHS.infraLife,        infraLifeChoroStyle],
-  ['lyrInfraCritical',    'infraCritical',    PATHS.infraCritical,    STYLE.infraCritical],
-  ['lyrInfraContaminated','infraContaminated',PATHS.infraContaminated,STYLE.infraContaminated],
-  ['lyrInfraDangerous',   'infraDangerous',   PATHS.infraDangerous,   STYLE.infraDangerous],
-  ['lyrInfraDamaged',     'infraDamaged',     PATHS.infraDamaged,     STYLE.infraDamaged],
+  ['lyrInfraLife',         'infraLife',         PATHS.infraLife,         infraLifeChoroStyle],
+  ['lyrInfraCritical',     'infraCritical',     PATHS.infraCritical,     infraCriticalChoroStyle],
+  ['lyrInfraContaminated', 'infraContaminated', PATHS.infraContaminated, infraContaminatedChoroStyle],
+  ['lyrInfraDangerous',    'infraDangerous',    PATHS.infraDangerous,    infraDangerousChoroStyle],
+  ['lyrInfraDamaged',      'infraDamaged',      PATHS.infraDamaged,      infraDamagedChoroStyle],
 
-  ['lyrFavPlaces',        'favPlaces',        PATHS.favPlaces,        STYLE.favPlaces],
-  ['lyrSymbolic',         'symbolicMeaning',  PATHS.symbolicMeaning,  STYLE.symbolicMeaning],
-  ['lyrProtected',        'protectedAreas',   PATHS.protectedAreas,   STYLE.protectedAreas],
+  ['lyrFavPlaces',         'favPlaces',         PATHS.favPlaces,         STYLE.favPlaces],
+  ['lyrSymbolic',          'symbolicMeaning',   PATHS.symbolicMeaning,   STYLE.symbolicMeaning],
+  ['lyrProtected',         'protectedAreas',    PATHS.protectedAreas,    STYLE.protectedAreas],
 
-  ['lyrScienceObs',       'scienceObs',       PATHS.scienceObs,       STYLE.scienceObs],
-  ['lyrScienceActivities','scienceActivities',PATHS.scienceActivities,STYLE.scienceActivities],
+  ['lyrScienceObs',        'scienceObs',        PATHS.scienceObs,        STYLE.scienceObs],
+  ['lyrScienceActivities', 'scienceActivities', PATHS.scienceActivities, STYLE.scienceActivities],
 
-  ['lyrCCSummer',         'ccSummer',         PATHS.ccSummer,         STYLE.ccSummer],
-  ['lyrCCWinter',         'ccWinter',         PATHS.ccWinter,         STYLE.ccWinter],
-  ['lyrCCNegative',       'ccNegative',       PATHS.ccNegative,       STYLE.ccNegative]
+  ['lyrCCSummer',          'ccSummer',          PATHS.ccSummer,          STYLE.ccSummer],
+  ['lyrCCWinter',          'ccWinter',          PATHS.ccWinter,          STYLE.ccWinter],
+  ['lyrCCNegative',        'ccNegative',        PATHS.ccNegative,        STYLE.ccNegative]
 ];
+  
 // Wire children
 toggleMap.forEach(([chkId, id, url, style]) => {
   const checkbox = document.getElementById(chkId);
@@ -1538,8 +1620,6 @@ toggleMap.forEach(([chkId, id, url, style]) => {
       console.log('[Layer toggle]', id, '→ adding to map');
       layer.addTo(map);
 
-      // Auto-zoom when a user turns a layer on
-      // (to zoom when group toggles are used, remove the "e.isTrusted" check)
       if (e.isTrusted) {
         zoomToLayer(layer);
       }
@@ -1548,9 +1628,21 @@ toggleMap.forEach(([chkId, id, url, style]) => {
       map.removeLayer(layer);
     }
 
-    // NEW: show/hide classified sub-legends when these layers toggle
+    // Show/hide classified sub-legends when these layers toggle
     if (id === 'infraLife') {
       setSubLegendVisible('sublegendInfraLife', e.target.checked);
+    }
+    if (id === 'infraCritical') {
+      setSubLegendVisible('sublegendInfraCritical', e.target.checked);
+    }
+    if (id === 'infraContaminated') {
+      setSubLegendVisible('sublegendInfraContaminated', e.target.checked);
+    }
+    if (id === 'infraDangerous') {
+      setSubLegendVisible('sublegendInfraDangerous', e.target.checked);
+    }
+    if (id === 'infraDamaged') {
+      setSubLegendVisible('sublegendInfraDamaged', e.target.checked);
     }
     if (id === 'routesLong') {
       setSubLegendVisible('sublegendRoutesLong', e.target.checked);
@@ -1559,7 +1651,7 @@ toggleMap.forEach(([chkId, id, url, style]) => {
       setSubLegendVisible('sublegendRoutesShort', e.target.checked);
     }
 
-    // 👇 Extra: show / hide chart when Hiking layer is toggled
+    // Extra: show / hide chart when Hiking layer is toggled
     if (id === 'hiking') {
       console.log('[Hiking] checkbox changed, calling chart show/hide');
       if (e.target.checked) {
@@ -1969,5 +2061,6 @@ window.addEventListener('resize', () => {
 </script>
 </body>
 </html>
+
 
 
