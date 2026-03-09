@@ -504,9 +504,9 @@
     <div class="card" id="card-display">
       <h2>Display</h2>
       <label class="small muted">
-        Transparency: <strong id="opacPct">50%</strong>
+        Transparency: <span id="opacPct">20%</span>
       </label>
-      <input type="range" id="opacity" min="0" max="100" step="1" value="50"
+      <input type="range" id="opacity" min="0" max="100" value="20">
              style="width:100%; margin-top:8px;">
       <p class="small muted" style="margin-top:6px;">
         Affects all participatory layers.
@@ -1274,7 +1274,7 @@ renderSubLegend('sublegendRoutesLong',         'Route length concentration (%)',
 renderSubLegend('sublegendRoutesShort',        'Short route concentration (%)',                     ROUTE_SHORT_CLASSES);
 
 /* Paint swatches in the sidebar using STYLE colors */
-let currentOpacity = 0.5; // 0% transparency (fully opaque) by default
+let currentOpacity = 0.8; // 0% transparency (fully opaque) by default
 
 function paintSwatches(){
   document.querySelectorAll('.legend-item').forEach(el => {
@@ -2061,6 +2061,7 @@ window.addEventListener('resize', () => {
 </script>
 </body>
 </html>
+
 
 
 
