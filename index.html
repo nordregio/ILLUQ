@@ -585,15 +585,18 @@
           <span class="legend-swatch"></span>
           <span>Long routes</span>
         </label>
-        <!-- NEW: sub-legend (shown only when layer is on) -->
+        <!-- HEXAGON SUB-LEGEND (inactive)
         <div class="sublegend" id="sublegendRoutesLong" style="display:none;"></div>
+        -->
       
         <label class="legend-item" data-style-key="routesShort">
           <input type="checkbox" id="lyrRoutesShort">
           <span class="legend-swatch"></span>
           <span>Short routes</span>
         </label>
+        <!-- HEXAGON SUB-LEGEND (inactive)
         <div class="sublegend" id="sublegendRoutesShort" style="display:none;"></div>
+        -->
       </div>
       <!-- Infrastructure -->
       <div class="legend-group" id="grpInfraBlock">
@@ -788,7 +791,7 @@
    SECTION 4.1: Map setup & base map layers
    --------------------------------------------- */
 
-console.log("MAP VERSION: SVALBARD ONLY, NO AUTO-ZOOM");
+console.log("MAP VERSION");
 
 
 // 1) Create the Leaflet map
@@ -824,7 +827,7 @@ const hillshade = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/servi
 });
 
 /* ---------------------------------------------
-   SECTION 4.2: Non-participatory overlays (kept)
+   SECTION 4.2: Non-participatory overlays 
    --------------------------------------------- */
 // (S4.2.a) Countries borders
 let countriesLayer = null;
@@ -863,12 +866,12 @@ const PATHS = {
   fishing: 'SVA/5_Fishing/fishing_data_join.zip',
   hunting: 'SVA/6_Hunting/Hunting_data_join.zip',
 
-  // UPDATED: use concentration grids for routes
+  // UPDATED: use line shapefiles for routes
   routesLong: [
-    'SVA/7_Routes/routes_long_data_join.zip', // long_routes_concentration_grid.zip
+    'SVA/7_Routes/routes_long_data_join.zip',
   ],
   routesShort: [
-    'SVA/7_Routes/routes_data_join.zip', // short_routes_concentration_grid.zip
+    'SVA/7_Routes/routes_data_join.zip',
   ],
 
   // UPDATED: infrastructure concentration grids
@@ -952,9 +955,9 @@ const STYLE = {
     opacity:1
   },
 
-  // Routes (swatch only; actual long routes layer is now choropleth)
-  routesLong:  { color:'#111827', weight:3, opacity:0.9 },
-  routesShort: { color:'#f97373', weight:3, dashArray:'6 4', opacity:0.9 },
+  // Routes (line shapefiles)
+  routesLong:  { color:'#000000', weight:3, dashArray:null, opacity:0.9 },
+  routesShort: { color:'#dc2626', weight:3, dashArray:'6 4', opacity:0.9 },
 
   // Infrastructure (swatch only; infraLife is now choropleth)
   lifeInfraPlaceholder: null,
@@ -1153,7 +1156,8 @@ const INFRA_DAMAGED_CLASSES = [
   { label: '10.5 - 16.7',    color: '#831843',    match: v => v >= 10.5 }
 ];
 
-// Routes bins
+/*
+HEXAGON ROUTE LEGEND/BINS (inactive)
 const ROUTE_LEN_CLASSES = [
   { label: 'No occurrences', color: 'transparent', match: v => v === 0, transparent: true },
   { label: '1',              color: '#dbeafe',    match: v => v > 0 && v <= 1 },
@@ -1172,6 +1176,7 @@ const ROUTE_SHORT_CLASSES = [
   { label: '2.5 - 3',        color: '#1e3a8a',    match: v => v >= 2.5 && v <= 3 },
   { label: '>3',             color: '#172554',    match: v => v > 3 }
 ];
+*/
 
 function classForValue(v, classes){
   if (!Number.isFinite(v)) return null;
@@ -1252,16 +1257,22 @@ const INFRA_CRITICAL_FIELD    = 'occ_concen';
 const INFRA_CONTAM_FIELD      = 'occ_concen';
 const INFRA_DANGEROUS_FIELD   = 'occ_concen';
 const INFRA_DAMAGED_FIELD     = 'occ_concen';
+/*
+HEXAGON ROUTE FIELDS/STYLES (inactive)
 const ROUTE_LEN_FIELD         = 'route_len1';
 const ROUTE_SHORT_FIELD       = 'occ_concen';
+*/
 
 const infraLifeChoroStyle          = makeChoroStyleFn(INFRA_OCC_FIELD,       INFRA_LIFE_CLASSES);
 const infraCriticalChoroStyle      = makeChoroStyleFn(INFRA_CRITICAL_FIELD,  INFRA_CRITICAL_CLASSES);
 const infraContaminatedChoroStyle  = makeChoroStyleFn(INFRA_CONTAM_FIELD,    INFRA_CONTAM_CLASSES);
 const infraDangerousChoroStyle     = makeChoroStyleFn(INFRA_DANGEROUS_FIELD, INFRA_DANGEROUS_CLASSES);
 const infraDamagedChoroStyle       = makeChoroStyleFn(INFRA_DAMAGED_FIELD,   INFRA_DAMAGED_CLASSES);
+/*
+HEXAGON ROUTE CHOROPLETH STYLES (inactive)
 const routesLongChoroStyle         = makeChoroStyleFn(ROUTE_LEN_FIELD,       ROUTE_LEN_CLASSES);
 const routesShortChoroStyle        = makeChoroStyleFn(ROUTE_SHORT_FIELD,     ROUTE_SHORT_CLASSES);
+*/
 
 // Render sublegends once (hidden until toggled)
 renderSubLegend('sublegendInfraLife',          'Life-supporting infrastructure concentration (%)', INFRA_LIFE_CLASSES);
@@ -1269,8 +1280,11 @@ renderSubLegend('sublegendInfraCritical',      'Critical infrastructure concentr
 renderSubLegend('sublegendInfraContaminated',  'Contaminated sites concentration (%)',              INFRA_CONTAM_CLASSES);
 renderSubLegend('sublegendInfraDangerous',     'Dangerous infrastructure concentration (%)',        INFRA_DANGEROUS_CLASSES);
 renderSubLegend('sublegendInfraDamaged',       'Damaged infrastructure concentration (%)',          INFRA_DAMAGED_CLASSES);
+/*
+HEXAGON ROUTE SUB-LEGENDS (inactive)
 renderSubLegend('sublegendRoutesLong',         'Route length concentration (%)',                    ROUTE_LEN_CLASSES);
 renderSubLegend('sublegendRoutesShort',        'Short route concentration (%)',                     ROUTE_SHORT_CLASSES);
+*/
 
 /* Paint swatches in the sidebar using STYLE colors */
 let currentOpacity = 0.8; // 0% transparency (fully opaque) by default
@@ -1283,12 +1297,30 @@ function paintSwatches(){
     const base = st.fillColor || st.color || '#999';
     sw.style.opacity = String(currentOpacity);
 
-    if (!st.fillColor && st.color){
+    if (key === 'routesLong' || key === 'routesShort') {
+      sw.style.width = '28px';
+      sw.style.height = '0';
+      sw.style.flex = '0 0 28px';
+      sw.style.background = 'transparent';
+      sw.style.border = '0';
+      sw.style.borderTop = `${st.weight || 3}px ${st.dashArray ? 'dashed' : 'solid'} ${st.color}`;
+      sw.style.borderRadius = '0';
+    } else if (!st.fillColor && st.color){
+      sw.style.width = '16px';
+      sw.style.height = '16px';
+      sw.style.flex = '0 0 16px';
       sw.style.background = 'transparent';
       sw.style.border = `2px solid ${st.color}`;
+      sw.style.borderTop = `2px solid ${st.color}`;
+      sw.style.borderRadius = '3px';
     } else {
+      sw.style.width = '16px';
+      sw.style.height = '16px';
+      sw.style.flex = '0 0 16px';
       sw.style.background = base;
       sw.style.border = '1px solid rgba(0,0,0,.15)';
+      sw.style.borderTop = '1px solid rgba(0,0,0,.15)';
+      sw.style.borderRadius = '3px';
     }
   });
 
@@ -1581,8 +1613,8 @@ const toggleMap = [
   ['lyrFishing',      'fishing',      PATHS.fishing,      STYLE.fishing],
   ['lyrHunting',      'hunting',      PATHS.hunting,      STYLE.hunting],
 
-  ['lyrRoutesLong',   'routesLong',   PATHS.routesLong,   routesLongChoroStyle],
-  ['lyrRoutesShort',  'routesShort',  PATHS.routesShort,  routesShortChoroStyle],
+  ['lyrRoutesLong',   'routesLong',   PATHS.routesLong,   STYLE.routesLong],
+  ['lyrRoutesShort',  'routesShort',  PATHS.routesShort,  STYLE.routesShort],
 
   ['lyrInfraLife',         'infraLife',         PATHS.infraLife,         infraLifeChoroStyle],
   ['lyrInfraCritical',     'infraCritical',     PATHS.infraCritical,     infraCriticalChoroStyle],
@@ -1643,12 +1675,15 @@ toggleMap.forEach(([chkId, id, url, style]) => {
     if (id === 'infraDamaged') {
       setSubLegendVisible('sublegendInfraDamaged', e.target.checked);
     }
+    /*
+    HEXAGON ROUTE SUB-LEGEND TOGGLES (inactive)
     if (id === 'routesLong') {
       setSubLegendVisible('sublegendRoutesLong', e.target.checked);
     }
     if (id === 'routesShort') {
       setSubLegendVisible('sublegendRoutesShort', e.target.checked);
     }
+    */
 
     // Extra: show / hide chart when Hiking layer is toggled
     if (id === 'hiking') {
@@ -2060,8 +2095,3 @@ window.addEventListener('resize', () => {
 </script>
 </body>
 </html>
-
-
-
-
-
