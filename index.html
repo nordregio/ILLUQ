@@ -1480,7 +1480,7 @@ function maxZoomFromBounds(bounds) {
 }
 
 // Is this a real geographic coordinate (not NaN, not projected metres)?
-function iSVAlidLatLng(ll){
+function isValidLatLng(ll){
   return ll &&
          Number.isFinite(ll.lat) && Number.isFinite(ll.lng) &&
          Math.abs(ll.lat) <= 90 && Math.abs(ll.lng) <= 180;
@@ -1498,12 +1498,12 @@ function safeLayerBounds(layer){
   layer.eachLayer(l => {
     if (typeof l.getLatLng === 'function') {          // points (circleMarkers)
       const ll = l.getLatLng();
-      if (iSVAlidLatLng(ll)) { b.extend(ll); pointCount++; }
+      if (isValidLatLng(ll)) { b.extend(ll); pointCount++; }
       else badCount++;
     } else if (typeof l.getBounds === 'function') {   // lines / polygons
       const lb = l.getBounds();
-      if (lb && lb.iSVAlid() &&
-          iSVAlidLatLng(lb.getSouthWest()) && iSVAlidLatLng(lb.getNorthEast())) {
+      if (lb && lb.isValid() &&
+          isValidLatLng(lb.getSouthWest()) && isValidLatLng(lb.getNorthEast())) {
         b.extend(lb);
       } else badCount++;
     }
@@ -1521,7 +1521,7 @@ function zoomToLayer(layer){
   if (!layer || typeof layer.eachLayer !== 'function') return;
 
   const { bounds: b, pointCount } = safeLayerBounds(layer);
-  if (!b.iSVAlid()) {
+  if (!b.isValid()) {
     console.warn('[zoomToLayer] no valid bounds – keeping current view');
     return;
   }
