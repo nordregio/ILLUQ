@@ -1533,17 +1533,19 @@ async function ensureLayer(id, urlOrList, style){
 // ---------- Auto-zoom to layer bounds (smart) ----------
 
 // Pick a maxZoom based on how large the layer extent is (diagonal distance)
-function maxZoomFromBounds(bounds){
+function maxZoomFromBounds(bounds) {
   const sw = bounds.getSouthWest();
   const ne = bounds.getNorthEast();
+
   const diagKm = map.distance(sw, ne) / 1000;
 
-  if (diagKm < 2)   return 16;
-  if (diagKm < 8)   return 15;
-  if (diagKm < 20)  return 14;
-  if (diagKm < 50)  return 13;
+  if (diagKm < 2)   return 13;
+  if (diagKm < 8)   return 13;
+  if (diagKm < 20)  return 13;
+  if (diagKm < 50)  return 12;
   if (diagKm < 150) return 12;
   if (diagKm < 400) return 11;
+
   return 10;
 }
 
@@ -1551,7 +1553,7 @@ function maxZoomFromBounds(bounds){
 function zoomToLayer(layer){
   if (!layer || typeof layer.getBounds !== 'function') return;
   const b = layer.getBounds();
-  if (!b || typeof b.isValid !== 'function' || !b.isValid()) return;
+  if (!b || !b.isValid()) return;
 
   const sidebar = document.querySelector('.sidebar');
   const sidebarW = sidebar ? sidebar.getBoundingClientRect().width : 420;
