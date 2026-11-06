@@ -797,7 +797,9 @@ console.log("MAP VERSION");
 // 1) Create the Leaflet map
 const map = L.map('map', {
   center: [78.2217, 15.3555],  // center from map.getCenter()
-  zoom: 9                     // zoom from map.getZoom()
+  zoom: 9,                    // zoom from map.getZoom()
+  minZoom: 2,                 // FIX: never allow an invalid/too-small zoom
+  maxZoom: 18                 // FIX: never zoom past what the base maps can serve
 });
 
 // 2) Optional: coordinate readout if add <span id="coordVal">
@@ -811,9 +813,11 @@ if (coordValEl){
 
 // (S4.1.a) Base map definitions
 const basemaps = {
-  osm: L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {maxZoom:19, attribution:'&copy; OpenStreetMap'}),
-  voyager: L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {subdomains:'abcd',maxZoom:19,attribution:'&copy; OpenStreetMap & CARTO'}),
-  imagery: L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {maxZoom:19,attribution:'Imagery &copy; Esri'})
+  // FIX: maxNativeZoom → beyond that zoom Leaflet stretches the last available tiles
+  // instead of showing an empty (blank) background.
+  osm: L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {maxZoom:18, maxNativeZoom:18, attribution:'&copy; OpenStreetMap'}),
+  voyager: L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {subdomains:'abcd',maxZoom:18,maxNativeZoom:18,attribution:'&copy; OpenStreetMap & CARTO'}),
+  imagery: L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {maxZoom:18,maxNativeZoom:16,attribution:'Imagery &copy; Esri'})
 };
 basemaps.imagery.addTo(map);
 setTimeout(() => map.invalidateSize(), 0);
@@ -1549,27 +1553,95 @@ function maxZoomFromBounds(bounds) {
   return 10;
 }
 
+// Is this a real geographic coordinate (not NaN, not projected metres)?
+function isValidLatLng(ll){
+  return ll &&
+         Number.isFinite(ll.lat) && Number.isFinite(ll.lng) &&
+         Math.abs(ll.lat) <= 90 && Math.abs(ll.lng) <= 180;
+}
+
+// FIX: build bounds only from valid coordinates.
+// Point layers (like Favorite places) can contain empty/NaN points or
+// coordinates outside lat/lng range; those made fitBounds jump to an
+// invalid view where no base-map tiles exist (background disappeared).
+function safeLayerBounds(layer){
+  const b = L.latLngBounds([]);
+  let pointCount = 0;
+  let badCount = 0;
+
+  layer.eachLayer(l => {
+    if (typeof l.getLatLng === 'function') {          // points (circleMarkers)
+      const ll = l.getLatLng();
+      if (isValidLatLng(ll)) { b.extend(ll); pointCount++; }
+      else badCount++;
+    } else if (typeof l.getBounds === 'function') {   // lines / polygons
+      const lb = l.getBounds();
+      if (lb && lb.isValid() &&
+          isValidLatLng(lb.getSouthWest()) && isValidLatLng(lb.getNorthEast())) {
+        b.extend(lb);
+      } else badCount++;
+    }
+  });
+
+  if (badCount) {
+    console.warn(`[zoomToLayer] ignored ${badCount} feature(s) with invalid coordinates ` +
+                 `(check the shapefile .prj / empty geometries).`);
+  }
+  return { bounds: b, pointCount };
+}
+
 // Fit map to a layer, with padding so it won't hide under toolbox/sidebar
 function zoomToLayer(layer){
-  if (!layer || typeof layer.getBounds !== 'function') return;
-  const b = layer.getBounds();
-  if (!b || !b.isValid()) return;
+  if (!layer || typeof layer.eachLayer !== 'function') return;
+
+  const { bounds: b, pointCount } = safeLayerBounds(layer);
+  if (!b.isValid()) {
+    console.warn('[zoomToLayer] no valid bounds – keeping current view');
+    return;
+  }
 
   const sidebar = document.querySelector('.sidebar');
   const sidebarW = sidebar ? sidebar.getBoundingClientRect().width : 420;
+  const size = map.getSize();
 
   // padding (pixels): [x,y]
-  const leftPad   = 110;            // left toolbox + breathing room
-  const topPad    = 40;
-  const rightPad  = sidebarW + 60;  // sidebar width + breathing room
-  const bottomPad = 40;
+  let leftPad   = 110;            // left toolbox + breathing room
+  let topPad    = 40;
+  let rightPad  = sidebarW + 60;  // sidebar width + breathing room
+  let bottomPad = 40;
 
-  map.fitBounds(b, {
+  // FIX: if padding is wider/taller than the map (small window), Leaflet
+  // computes a NaN zoom → blank map. Shrink padding so space always remains.
+  if (leftPad + rightPad > size.x - 100) { leftPad = 20; rightPad = 20; }
+  if (topPad + bottomPad > size.y - 100) { topPad = 20; bottomPad = 20; }
+
+  // FIX: point layers get a gentler max zoom (less zoomed in)
+  let maxZ = maxZoomFromBounds(b);
+  if (pointCount > 0) maxZ = Math.min(maxZ, 11);
+
+  // Single point / all points on the same spot → zero-size bounds: just center on it
+  const sw = b.getSouthWest(), ne = b.getNorthEast();
+  if (sw.equals(ne)) {
+    map.setView(b.getCenter(), maxZ, { animate: true });
+    return;
+  }
+
+  const opts = {
     paddingTopLeft: [leftPad, topPad],
     paddingBottomRight: [rightPad, bottomPad],
-    maxZoom: maxZoomFromBounds(b),
-    animate: true
-  });
+    maxZoom: maxZ
+  };
+
+  // FIX: verify the target zoom is a real number before moving the map
+  const targetZoom = map.getBoundsZoom(b, false,
+                       L.point(leftPad + rightPad, topPad + bottomPad));
+  if (!Number.isFinite(targetZoom)) {
+    console.warn('[zoomToLayer] computed zoom was invalid – centering instead');
+    map.setView(b.getCenter(), Math.min(9, maxZ), { animate: true });
+    return;
+  }
+
+  map.fitBounds(b, { ...opts, animate: true });
 }
 
 /* ---------------------------------------------
